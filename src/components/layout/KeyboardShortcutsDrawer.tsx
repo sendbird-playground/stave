@@ -1,6 +1,30 @@
 import { Fragment, useMemo } from "react";
 import { Keyboard } from "lucide-react";
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, Kbd, KbdGroup, KbdSeparator } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  Kbd,
+  KbdGroup,
+  KbdSeparator,
+} from "@/components/ui";
+import {
+  describeModelShortcutKey,
+  MODEL_SHORTCUT_SLOT_LABELS,
+  normalizeModelShortcutKeys,
+} from "@/lib/providers/model-shortcuts";
+import { useAppStore } from "@/store/app.store";
 
 interface KeyboardShortcutsDrawerProps {
   open: boolean;
@@ -20,12 +44,19 @@ interface ShortcutSection {
   shortcuts: ShortcutItem[];
 }
 
-function ShortcutKeys({ sequences, sequenceJoiner = "or" }: Pick<ShortcutItem, "sequences" | "sequenceJoiner">) {
+function ShortcutKeys({
+  sequences,
+  sequenceJoiner = "or",
+}: Pick<ShortcutItem, "sequences" | "sequenceJoiner">) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {sequences.map((sequence, sequenceIndex) => (
         <Fragment key={sequence.join("-")}>
-          {sequenceIndex > 0 ? <span className="text-xs text-muted-foreground">{sequenceJoiner}</span> : null}
+          {sequenceIndex > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {sequenceJoiner}
+            </span>
+          ) : null}
           <KbdGroup aria-label={`Keyboard shortcut ${sequence.join(" ")}`}>
             {sequence.map((part, partIndex) => (
               <Fragment key={`${part}-${partIndex}`}>
@@ -40,29 +71,69 @@ function ShortcutKeys({ sequences, sequenceJoiner = "or" }: Pick<ShortcutItem, "
   );
 }
 
-export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcutsDrawerProps) {
+export function KeyboardShortcutsDrawer({
+  open,
+  onOpenChange,
+}: KeyboardShortcutsDrawerProps) {
+  const modifierLabel = useMemo(
+    () =>
+      typeof navigator !== "undefined" &&
+      /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+        ? "Cmd"
+        : "Ctrl",
+    [],
+  );
+  const storedModelShortcutKeys = useAppStore(
+    (state) => state.settings.modelShortcutKeys,
+  );
+  const normalizedModelShortcutKeys = useMemo(
+    () => normalizeModelShortcutKeys(storedModelShortcutKeys),
+    [storedModelShortcutKeys],
+  );
+  const modelShortcutItems = useMemo<ShortcutItem[]>(() => {
+    const assignedItems = MODEL_SHORTCUT_SLOT_LABELS.map((slotLabel, index) => {
+      const details = describeModelShortcutKey({
+        shortcutKey: normalizedModelShortcutKeys[index] ?? "",
+      });
+      if (!details) {
+        return null;
+      }
+      return {
+        label: `Select ${details.modelLabel}`,
+        description: `Switch the active task to ${details.providerLabel} and use ${details.modelLabel}. Customize this slot in Settings → Command Palette.`,
+        sequences: [["Alt", slotLabel]],
+      } satisfies ShortcutItem;
+    }).filter((item): item is ShortcutItem => item != null);
+
+    if (assignedItems.length > 0) {
+      return assignedItems;
+    }
+
+    return [
+      {
+        label: "Model shortcut slots",
+        description:
+          "Assign Alt+1..0 in Settings → Command Palette to jump directly to specific prompt models.",
+        sequences: [["Alt", "1-0"]],
+      },
+    ];
+  }, [normalizedModelShortcutKeys]);
+
   if (!open) {
     return null;
   }
-
-  const modifierLabel = useMemo(
-    () => (
-      typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
-        ? "Cmd"
-        : "Ctrl"
-    ),
-    [],
-  );
 
   const sections = useMemo<ShortcutSection[]>(
     () => [
       {
         title: "Tasks",
-        description: "Create conversations and move around the current workspace.",
+        description:
+          "Create conversations and move around the current workspace.",
         shortcuts: [
           {
             label: "Select workspace",
-            description: "Jump to the first nine visible workspaces in the sidebar, from top to bottom.",
+            description:
+              "Jump to the first nine visible workspaces in the sidebar, from top to bottom.",
             sequences: [[modifierLabel, "1-9"]],
           },
           {
@@ -72,18 +143,25 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           },
           {
             label: "Close tab / task",
-            description: "Close the active editor tab, or archive the task if no tabs are open.",
+            description:
+              "Close the active editor tab, or archive the task if no tabs are open.",
             sequences: [[modifierLabel, "W"]],
           },
           {
             label: "Next task",
             description: "Move selection to the next task.",
-            sequences: [[modifierLabel, "Shift", "J"], [modifierLabel, "Shift", "ArrowDown"]],
+            sequences: [
+              [modifierLabel, "Shift", "J"],
+              [modifierLabel, "Shift", "ArrowDown"],
+            ],
           },
           {
             label: "Previous task",
             description: "Move selection to the previous task.",
-            sequences: [[modifierLabel, "Shift", "K"], [modifierLabel, "Shift", "ArrowUp"]],
+            sequences: [
+              [modifierLabel, "Shift", "K"],
+              [modifierLabel, "Shift", "ArrowUp"],
+            ],
           },
         ],
       },
@@ -93,12 +171,14 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
         shortcuts: [
           {
             label: "Toggle workspace sidebar",
-            description: "Collapse or expand the left project and workspace list.",
+            description:
+              "Collapse or expand the left project and workspace list.",
             sequences: [[modifierLabel, "B"]],
           },
           {
             label: "Source control panel",
-            description: "Show or hide the source control overlay on the right rail.",
+            description:
+              "Show or hide the source control overlay on the right rail.",
             sequences: [[modifierLabel, "Shift", "B"]],
           },
           {
@@ -123,7 +203,8 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           },
           {
             label: "Toggle Zen mode",
-            description: "Hide surrounding workspace chrome and suppress thinking details to focus on chat and results.",
+            description:
+              "Hide surrounding workspace chrome and suppress thinking details to focus on chat and results.",
             sequences: [[modifierLabel, "K"], ["Z"]],
             sequenceJoiner: "then",
           },
@@ -135,8 +216,12 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
         shortcuts: [
           {
             label: "Focus prompt composer",
-            description: "Move focus back to the chat prompt when the composer is not already focused.",
-            sequences: [[modifierLabel, "L"], [modifierLabel, "J"]],
+            description:
+              "Move focus back to the chat prompt when the composer is not already focused.",
+            sequences: [
+              [modifierLabel, "L"],
+              [modifierLabel, "J"],
+            ],
           },
           {
             label: "Open model selector",
@@ -145,22 +230,26 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           },
           {
             label: "Quick open file",
-            description: "Search the active workspace files and open a file in the editor.",
+            description:
+              "Search the active workspace files and open a file in the editor.",
             sequences: [[modifierLabel, "P"]],
           },
           {
             label: "Open command palette",
-            description: "Open the global Stave command launcher for IDE actions and settings.",
+            description:
+              "Open the global Stave command launcher for IDE actions and settings.",
             sequences: [[modifierLabel, "Shift", "P"]],
           },
           {
             label: "Toggle plan mode",
-            description: "Switch the active prompt between normal and plan mode from anywhere in the app.",
+            description:
+              "Switch the active prompt between normal and plan mode from anywhere in the app.",
             sequences: [["Shift", "Tab"]],
           },
           {
             label: "Dialog primary action",
-            description: "Run Save/Create/Open/Confirm in the active dialog. Use modifier+Enter in multiline fields.",
+            description:
+              "Run Save/Create/Open/Confirm in the active dialog. Use modifier+Enter in multiline fields.",
             sequences: [["Enter"], [modifierLabel, "Enter"]],
           },
           {
@@ -170,10 +259,17 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           },
           {
             label: "Stop active turn",
-            description: "Abort the current task run while focus is in the task pane.",
+            description:
+              "Abort the current task run while focus is in the task pane.",
             sequences: [["Esc"]],
           },
         ],
+      },
+      {
+        title: "Models",
+        description:
+          "Jump directly to the models you mapped for the prompt composer.",
+        shortcuts: modelShortcutItems,
       },
       {
         title: "Help",
@@ -192,7 +288,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
         ],
       },
     ],
-    [modifierLabel],
+    [modelShortcutItems, modifierLabel],
   );
 
   return (
@@ -206,32 +302,52 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
                   <Keyboard />
                 </div>
                 <div className="min-w-0">
-                  <DrawerTitle className="text-lg font-semibold">Keyboard Shortcuts</DrawerTitle>
+                  <DrawerTitle className="text-lg font-semibold">
+                    Keyboard Shortcuts
+                  </DrawerTitle>
                   <DrawerDescription>
                     The current shell shortcuts available in Stave.
                   </DrawerDescription>
                 </div>
               </div>
-              <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
+              <Badge
+                variant="secondary"
+                className="hidden shrink-0 sm:inline-flex"
+              >
                 {modifierLabel} on this device
               </Badge>
             </div>
           </DrawerHeader>
           <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-4">
             {sections.map((section) => (
-              <Card key={section.title} className="border-border/70 bg-background/75 shadow-sm">
+              <Card
+                key={section.title}
+                className="border-border/70 bg-background/75 shadow-sm"
+              >
                 <CardHeader className="gap-1.5 pb-3">
-                  <CardTitle className="text-sm font-semibold">{section.title}</CardTitle>
+                  <CardTitle className="text-sm font-semibold">
+                    {section.title}
+                  </CardTitle>
                   <CardDescription>{section.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {section.shortcuts.map((shortcut) => (
-                    <div key={shortcut.label} className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/80 px-3 py-3">
+                    <div
+                      key={shortcut.label}
+                      className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/80 px-3 py-3"
+                    >
                       <div className="flex flex-col gap-1">
-                        <p className="text-sm font-medium text-foreground">{shortcut.label}</p>
-                        <p className="text-xs text-muted-foreground">{shortcut.description}</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {shortcut.label}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {shortcut.description}
+                        </p>
                       </div>
-                      <ShortcutKeys sequences={shortcut.sequences} sequenceJoiner={shortcut.sequenceJoiner} />
+                      <ShortcutKeys
+                        sequences={shortcut.sequences}
+                        sequenceJoiner={shortcut.sequenceJoiner}
+                      />
                     </div>
                   ))}
                 </CardContent>
@@ -240,7 +356,10 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           </div>
           <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
-              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and the shortcut guide are ignored while typing in inputs, and command palette, plan mode, model selector, and Zen mode shortcuts stay globally available.
+              Workspace quick jump follows the sidebar's top-to-bottom order.
+              Quick open and the shortcut guide are ignored while typing in
+              inputs, and command palette, plan mode, model selector, model
+              shortcuts, and Zen mode shortcuts stay globally available.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>

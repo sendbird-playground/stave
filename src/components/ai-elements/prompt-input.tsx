@@ -89,6 +89,10 @@ import {
   NO_COMMAND_SELECTION,
   NO_PROMPT_HISTORY_SELECTION,
 } from "./prompt-input.utils";
+import {
+  findModelShortcutOption,
+  resolveModelShortcutSlot,
+} from "@/lib/providers/model-shortcuts";
 import { ModelSelector, type ModelSelectorOption } from "./model-selector";
 import {
   PromptInputProviderModePill,
@@ -111,6 +115,7 @@ interface PromptInputProps {
   selectedModel: ModelSelectorOption;
   modelOptions: readonly ModelSelectorOption[];
   recommendedModelOptions?: readonly ModelSelectorOption[];
+  modelShortcutKeys?: readonly string[];
   attachedFilePaths: string[];
   attachments?: Attachment[];
   promptHistoryEntries?: readonly string[];
@@ -345,6 +350,7 @@ export function PromptInput(args: PromptInputProps) {
     selectedModel,
     modelOptions,
     recommendedModelOptions,
+    modelShortcutKeys,
     attachedFilePaths,
     attachments,
     promptHistoryEntries,
@@ -706,12 +712,45 @@ export function PromptInput(args: PromptInputProps) {
       if (isAltP) {
         event.preventDefault();
         setModelSelectorOpenNonce((current) => current + 1);
+        return;
       }
+
+      const modelShortcutSlot = resolveModelShortcutSlot({
+        key: event.key,
+        code: event.code,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+      });
+      if (modelShortcutSlot === null) {
+        return;
+      }
+
+      const shortcutOption = findModelShortcutOption({
+        slotIndex: modelShortcutSlot,
+        shortcutKeys: modelShortcutKeys,
+        options: modelOptions,
+      });
+      if (!shortcutOption) {
+        return;
+      }
+
+      event.preventDefault();
+      onModelSelect({ selection: shortcutOption });
+      window.requestAnimationFrame(() => focusComposer());
     };
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [focusComposer, handleShiftTabShortcut, interactionsDisabled]);
+  }, [
+    focusComposer,
+    handleShiftTabShortcut,
+    interactionsDisabled,
+    modelOptions,
+    modelShortcutKeys,
+    onModelSelect,
+  ]);
 
   useEffect(() => {
     setSelectedPromptHistoryIndex(NO_PROMPT_HISTORY_SELECTION);

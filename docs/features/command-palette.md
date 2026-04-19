@@ -44,6 +44,7 @@ The palette is global. You do not need to focus the chat composer first.
 ### Provider And Settings
 
 - switch between Claude, Codex, and Stave Auto
+- jump straight to mapped models with `Alt+1..0`
 - open Settings
 - jump directly to a specific settings section
 - open keyboard shortcuts
@@ -79,6 +80,18 @@ This is the fastest way to learn Stave's navigation model without memorizing eve
 
 This is usually faster than opening Settings and browsing manually.
 
+### Jump Straight To A Model
+
+1. Press `Alt+1`, `Alt+2`, or any mapped `Alt+1..0` slot.
+2. Stave switches the active task to the mapped provider and model immediately.
+3. Open `Settings -> Command Palette` to change the assignments.
+
+Default bindings:
+
+- `Alt+1` → `Claude Opus 4.7`
+- `Alt+2` → `GPT-5.4`
+- `Alt+3` → `Stave Auto`
+
 ### Work Mostly From The Keyboard
 
 - Keep the palette for app-level actions.
@@ -96,6 +109,7 @@ That separation matters: the Command Palette controls Stave itself, while slash 
 - `Cmd/Ctrl+I` toggles the Information panel.
 - `Cmd/Ctrl+K`, then `Z` toggles Zen Mode.
 - `Alt+P` opens the prompt model selector.
+- `Alt+1..0` selects your mapped prompt models.
 
 ## Troubleshooting
 
