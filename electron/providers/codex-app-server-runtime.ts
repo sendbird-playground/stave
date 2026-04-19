@@ -116,6 +116,33 @@ type JsonRpcMessage = {
   error?: { code?: number; message?: string; data?: unknown };
 };
 
+type CodexAppServerAuthMode = "apikey" | "chatgpt" | "chatgptAuthTokens" | null;
+
+type CodexGetAuthStatusResponse = {
+  authMethod?: CodexAppServerAuthMode;
+  authToken?: string | null;
+  requiresOpenaiAuth?: boolean | null;
+};
+
+type CodexAccountReadResponse = {
+  account?: {
+    type?: string;
+    planType?: string | null;
+  } | null;
+  requiresOpenaiAuth?: boolean;
+};
+
+type CodexChatgptAuthTokensRefreshParams = {
+  reason?: "unauthorized";
+  previousAccountId?: string | null;
+};
+
+type CodexChatgptAuthTokensRefreshResponse = {
+  accessToken: string;
+  chatgptAccountId: string;
+  chatgptPlanType: string | null;
+};
+
 type ServerRequestMethod =
   | "item/commandExecution/requestApproval"
   | "item/fileChange/requestApproval"
@@ -200,6 +227,115 @@ function resolveApprovalPolicy(args: {
 
 function buildCodexEnv(args: { executablePath?: string } = {}) {
   return buildCodexCliEnv({ executablePath: args.executablePath });
+}
+
+function decodeJwtPayload(token: string) {
+  const trimmed = token.trim();
+  const parts = trimmed.split(".");
+  if (parts.length < 2 || !parts[1]) {
+    return null;
+  }
+  try {
+    const normalized = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+    const decoded = Buffer.from(normalized + padding, "base64").toString(
+      "utf8",
+    );
+    const parsed = JSON.parse(decoded) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function getJwtClaimRecord(args: {
+  payload: Record<string, unknown> | null;
+  key: string;
+}) {
+  const value = args.payload?.[args.key];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+export function resolveCodexChatgptAuthTokensRefreshResponse(args: {
+  authStatus: CodexGetAuthStatusResponse;
+  accountStatus: CodexAccountReadResponse;
+  previousAccountId?: string | null;
+}): CodexChatgptAuthTokensRefreshResponse | null {
+  const authMethod = args.authStatus.authMethod ?? null;
+  if (authMethod !== "chatgpt" && authMethod !== "chatgptAuthTokens") {
+    return null;
+  }
+
+  const accessToken = args.authStatus.authToken?.trim();
+  if (!accessToken) {
+    return null;
+  }
+
+  const payload = decodeJwtPayload(accessToken);
+  const authClaims = getJwtClaimRecord({
+    payload,
+    key: "https://api.openai.com/auth",
+  });
+  const chatgptAccountId =
+    typeof authClaims?.chatgpt_account_id === "string"
+      ? authClaims.chatgpt_account_id.trim()
+      : "";
+  if (!chatgptAccountId) {
+    return null;
+  }
+
+  const planTypeFromClaims =
+    typeof authClaims?.chatgpt_plan_type === "string"
+      ? authClaims.chatgpt_plan_type
+      : null;
+  const planTypeFromAccount =
+    typeof args.accountStatus.account?.planType === "string"
+      ? args.accountStatus.account.planType
+      : null;
+
+  return {
+    accessToken,
+    chatgptAccountId,
+    chatgptPlanType: planTypeFromAccount ?? planTypeFromClaims,
+  };
+}
+
+async function refreshCodexChatgptAuthTokens(args: {
+  executablePath: string;
+  previousAccountId?: string | null;
+}) {
+  const client = new CodexAppServerClient(args.executablePath);
+  try {
+    const [authStatus, accountStatus] = await Promise.all([
+      client.request<CodexGetAuthStatusResponse>("getAuthStatus", {
+        includeToken: true,
+        refreshToken: true,
+      }),
+      client.request<CodexAccountReadResponse>("account/read", {
+        refreshToken: true,
+      }),
+    ]);
+
+    const response = resolveCodexChatgptAuthTokensRefreshResponse({
+      authStatus,
+      accountStatus,
+      previousAccountId: args.previousAccountId,
+    });
+    if (!response) {
+      throw new Error(
+        "Codex ChatGPT token refresh requires an active ChatGPT login with a refreshable access token.",
+      );
+    }
+    return response;
+  } finally {
+    client.dispose("Closed temporary Codex auth refresh client.");
+  }
 }
 
 async function hasConnectedStaveLocalMcpForCodex() {
@@ -1235,8 +1371,30 @@ class CodexAppServerClient {
     );
   }
 
+  async respondError(
+    requestId: JsonRpcId,
+    error: { code: number; message: string; data?: unknown },
+  ) {
+    await this.ensureStarted();
+    this.process?.stdin.write(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        error,
+      }) + "\n",
+    );
+  }
+
   getLastErrorMessage() {
     return this.lastErrorMessage;
+  }
+
+  dispose(message = "Codex App Server closed.") {
+    if (!this.process) {
+      this.lastErrorMessage = message;
+      return;
+    }
+    this.teardownProcess(message);
   }
 
   private async start() {
@@ -2950,7 +3108,7 @@ export async function streamCodexWithAppServer(
     const account = await client.request<{
       account: unknown | null;
       requiresOpenaiAuth: boolean;
-    }>("account/read", { refreshToken: false });
+    }>("account/read", { refreshToken: true });
     if (!account.account && account.requiresOpenaiAuth) {
       const events: BridgeEvent[] = [
         {
@@ -3371,7 +3529,6 @@ export async function streamCodexWithAppServer(
           return;
         }
         case "item/tool/call":
-        case "account/chatgptAuthTokens/refresh":
           emitBridgeEvent({
             type: "error",
             message: `${message.method} is not supported in Stave yet.`,
@@ -3379,6 +3536,32 @@ export async function streamCodexWithAppServer(
           });
           void client.respond(message.id as JsonRpcId, {});
           return;
+        case "account/chatgptAuthTokens/refresh": {
+          const params = (message.params ?? {}) as CodexChatgptAuthTokensRefreshParams;
+          void (async () => {
+            try {
+              const response = await refreshCodexChatgptAuthTokens({
+                executablePath: codexExecutablePath,
+                previousAccountId: params.previousAccountId,
+              });
+              await client.respond(message.id as JsonRpcId, response);
+            } catch (error) {
+              const messageText = toCodexUserFacingErrorMessage({
+                message: error instanceof Error ? error.message : String(error),
+              });
+              emitBridgeEvent({
+                type: "error",
+                message: messageText,
+                recoverable: true,
+              });
+              await client.respondError(message.id as JsonRpcId, {
+                code: -32000,
+                message: messageText,
+              });
+            }
+          })();
+          return;
+        }
         default:
           return;
       }

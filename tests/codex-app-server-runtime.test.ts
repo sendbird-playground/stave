@@ -3,9 +3,19 @@ import {
   createCodexAppServerElicitationPauseController,
   mapCodexElicitationToApproval,
   mapCodexElicitationToUserInput,
+  resolveCodexChatgptAuthTokensRefreshResponse,
   summarizeCodexAppServerDebugMessage,
   toCodexConfigLayerDisplayValue,
 } from "../electron/providers/codex-app-server-runtime";
+
+function encodeJwtPayload(payload: Record<string, unknown>) {
+  const encoded = Buffer.from(JSON.stringify(payload))
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `header.${encoded}.signature`;
+}
 
 describe("mapCodexElicitationToUserInput", () => {
   test("maps form-mode elicitation schema into shared user-input questions", () => {
@@ -370,5 +380,68 @@ describe("createCodexAppServerElicitationPauseController", () => {
     } finally {
       console.warn = originalWarn;
     }
+  });
+});
+
+describe("resolveCodexChatgptAuthTokensRefreshResponse", () => {
+  test("maps a ChatGPT auth token into an external refresh response", () => {
+    const authToken = encodeJwtPayload({
+      "https://api.openai.com/auth": {
+        chatgpt_account_id: "acct_123",
+        chatgpt_plan_type: "plus",
+      },
+    });
+
+    expect(
+      resolveCodexChatgptAuthTokensRefreshResponse({
+        authStatus: {
+          authMethod: "chatgpt",
+          authToken,
+          requiresOpenaiAuth: true,
+        },
+        accountStatus: {
+          account: {
+            type: "chatgpt",
+            planType: "business",
+          },
+          requiresOpenaiAuth: true,
+        },
+      }),
+    ).toEqual({
+      accessToken: authToken,
+      chatgptAccountId: "acct_123",
+      chatgptPlanType: "business",
+    });
+  });
+
+  test("treats previous account hints as non-blocking metadata", () => {
+    const authToken = encodeJwtPayload({
+      "https://api.openai.com/auth": {
+        chatgpt_account_id: "acct_current",
+        chatgpt_plan_type: "plus",
+      },
+    });
+
+    expect(
+      resolveCodexChatgptAuthTokensRefreshResponse({
+        authStatus: {
+          authMethod: "chatgptAuthTokens",
+          authToken,
+          requiresOpenaiAuth: true,
+        },
+        accountStatus: {
+          account: {
+            type: "chatgpt",
+            planType: "plus",
+          },
+          requiresOpenaiAuth: true,
+        },
+        previousAccountId: "acct_other",
+      }),
+    ).toEqual({
+      accessToken: authToken,
+      chatgptAccountId: "acct_current",
+      chatgptPlanType: "plus",
+    });
   });
 });
