@@ -703,9 +703,10 @@ export async function inspectWorkspaceSyncStatus(args: {
       dirtyFileCount: 0,
       state: "not-git",
       summary: "Current workspace is not a git repository.",
-      detail: combineCommandDetail(rootResult) || "Open a git-backed workspace to inspect sync status against origin/main.",
+      detail: combineCommandDetail(rootResult) || "Open a git-backed workspace to inspect sync status against the default branch.",
       hasOriginRemote: false,
       hasOriginMain: false,
+      baseBranch: null,
       canFastForwardOriginMain: false,
       recommendedCommand: null,
     };
@@ -717,7 +718,8 @@ export async function inspectWorkspaceSyncStatus(args: {
     trackingResult,
     statusResult,
     originResult,
-    aheadBehindResult,
+    aheadBehindMainResult,
+    aheadBehindMasterResult,
   ] = await Promise.all([
     runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd }),
     runCommand({
@@ -730,7 +732,21 @@ export async function inspectWorkspaceSyncStatus(args: {
       command: "git rev-list --left-right --count HEAD...origin/main",
       cwd,
     }),
+    runCommand({
+      command: "git rev-list --left-right --count HEAD...origin/master",
+      cwd,
+    }),
   ]);
+
+  // Prefer origin/main; fall back to origin/master if main is not available.
+  const aheadBehindResult = aheadBehindMainResult.ok
+    ? aheadBehindMainResult
+    : aheadBehindMasterResult;
+  const baseBranch: string | null = aheadBehindMainResult.ok
+    ? "origin/main"
+    : aheadBehindMasterResult.ok
+      ? "origin/master"
+      : null;
 
   const branch = firstMeaningfulLine(branchResult.stdout);
   const trackingBranch = trackingResult.ok
@@ -766,47 +782,47 @@ export async function inspectWorkspaceSyncStatus(args: {
   if (!hasOriginRemote) {
     state = "missing-origin";
     summary = "No `origin` remote is configured for this workspace.";
-    detail = "Add an `origin` remote before Stave can compare or sync against origin/main.";
+    detail = "Add an `origin` remote before Stave can compare or sync against the default branch.";
     recommendedCommand = "git remote -v";
   } else if (!hasOriginMain) {
     state = "missing-origin-main";
-    summary = "`origin/main` is not available for this workspace.";
+    summary = "`origin/main` and `origin/master` are not available for this workspace.";
     detail = combineCommandDetail(aheadBehindResult)
-      || "Fetch the remote or verify the default branch before syncing against origin/main.";
+      || "Fetch the remote or verify the default branch before syncing.";
     recommendedCommand = "git fetch origin --prune";
   } else if (dirty) {
     state = "dirty";
     summary = `Working tree has ${dirtyItems.length} uncommitted file${dirtyItems.length === 1 ? "" : "s"}.`;
     detail = [
       behind && behind > 0
-        ? `The branch is also ${behind} commit${behind === 1 ? "" : "s"} behind origin/main.`
+        ? `The branch is also ${behind} commit${behind === 1 ? "" : "s"} behind ${baseBranch}.`
         : "",
       ahead && ahead > 0
-        ? `The branch is ${ahead} commit${ahead === 1 ? "" : "s"} ahead of origin/main.`
+        ? `The branch is ${ahead} commit${ahead === 1 ? "" : "s"} ahead of ${baseBranch}.`
         : "",
-      "Clean the working tree before updating from origin/main.",
+      `Clean the working tree before updating from ${baseBranch}.`,
     ]
       .filter(Boolean)
       .join(" ");
     recommendedCommand = "git status --short";
   } else if ((ahead ?? 0) > 0 && (behind ?? 0) > 0) {
     state = "diverged";
-    summary = `Current branch diverged from origin/main (${ahead} ahead / ${behind} behind).`;
-    detail = "A manual rebase or merge is required before Stave can consider this workspace aligned with origin/main.";
-    recommendedCommand = "git fetch origin --prune && git rebase origin/main";
+    summary = `Current branch diverged from ${baseBranch} (${ahead} ahead / ${behind} behind).`;
+    detail = `A manual rebase or merge is required before Stave can consider this workspace aligned with ${baseBranch}.`;
+    recommendedCommand = `git fetch origin --prune && git rebase ${baseBranch}`;
   } else if ((behind ?? 0) > 0) {
     state = "behind";
-    summary = `Current branch is ${behind} commit${behind === 1 ? "" : "s"} behind origin/main.`;
+    summary = `Current branch is ${behind} commit${behind === 1 ? "" : "s"} behind ${baseBranch}.`;
     detail = "A fast-forward update is available.";
-    recommendedCommand = "git fetch origin --prune && git merge --ff-only origin/main";
+    recommendedCommand = `git fetch origin --prune && git merge --ff-only ${baseBranch}`;
   } else if ((ahead ?? 0) > 0) {
     state = "ahead";
-    summary = `Current branch is ${ahead} commit${ahead === 1 ? "" : "s"} ahead of origin/main.`;
-    detail = "Your workspace includes local commits. Rebase manually if you want to replay them on top of the latest origin/main.";
-    recommendedCommand = "git fetch origin --prune && git rebase origin/main";
+    summary = `Current branch is ${ahead} commit${ahead === 1 ? "" : "s"} ahead of ${baseBranch}.`;
+    detail = `Your workspace includes local commits. Rebase manually if you want to replay them on top of the latest ${baseBranch}.`;
+    recommendedCommand = `git fetch origin --prune && git rebase ${baseBranch}`;
   } else {
     state = "synced";
-    summary = "Current branch is up to date with origin/main.";
+    summary = `Current branch is up to date with ${baseBranch}.`;
     detail = "No update is required.";
     recommendedCommand = "git fetch origin --prune";
   }
@@ -826,6 +842,7 @@ export async function inspectWorkspaceSyncStatus(args: {
     detail,
     hasOriginRemote,
     hasOriginMain,
+    baseBranch,
     canFastForwardOriginMain,
     recommendedCommand,
   };
@@ -865,7 +882,7 @@ export async function syncWorkspaceWithOriginMain(
   if (!workspace.hasOriginMain) {
     return {
       ok: false,
-      summary: "Cannot sync because `origin/main` is unavailable.",
+      summary: "Cannot sync because neither `origin/main` nor `origin/master` is available.",
       detail: workspace.detail,
       workspace,
     };
@@ -886,10 +903,13 @@ export async function syncWorkspaceWithOriginMain(
       workspace,
     };
   }
+
+  const effectiveBaseBranch = workspace.baseBranch ?? "origin/main";
+
   if ((workspace.behind ?? 0) === 0) {
     return {
       ok: true,
-      summary: "Workspace is already up to date with origin/main.",
+      summary: `Workspace is already up to date with ${effectiveBaseBranch}.`,
       detail: workspace.detail,
       workspace,
     };
@@ -909,7 +929,7 @@ export async function syncWorkspaceWithOriginMain(
   }
 
   const mergeResult = await runCommand({
-    command: "git merge --ff-only origin/main",
+    command: `git merge --ff-only ${effectiveBaseBranch}`,
     cwd: workspace.cwd ?? args.cwd,
   });
   const nextWorkspace = await inspectWorkspaceSyncStatus({
@@ -919,7 +939,7 @@ export async function syncWorkspaceWithOriginMain(
   if (!mergeResult.ok) {
     return {
       ok: false,
-      summary: "Fast-forward sync against origin/main failed.",
+      summary: `Fast-forward sync against ${effectiveBaseBranch} failed.`,
       detail: [
         combineCommandDetail(fetchResult),
         combineCommandDetail(mergeResult),
@@ -932,14 +952,14 @@ export async function syncWorkspaceWithOriginMain(
 
   return {
     ok: true,
-    summary: "Workspace synced with origin/main.",
+    summary: `Workspace synced with ${effectiveBaseBranch}.`,
     detail: [
       combineCommandDetail(fetchResult),
       combineCommandDetail(mergeResult),
     ]
       .filter(Boolean)
       .join("\n\n")
-      || "Current branch fast-forwarded to origin/main.",
+      || `Current branch fast-forwarded to ${effectiveBaseBranch}.`,
     workspace: nextWorkspace,
   };
 }
