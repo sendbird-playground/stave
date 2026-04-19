@@ -107,6 +107,11 @@ import {
   type TaskFilter,
 } from "@/lib/tasks";
 import {
+  cloneDefaultTaskPresets,
+  normalizePersistedTaskPresets,
+  type TaskPreset,
+} from "@/lib/task-presets";
+import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   DEFAULT_TERMINAL_FONT_SIZE,
   LEGACY_TERMINAL_FONT_FAMILY,
@@ -766,6 +771,12 @@ export interface AppSettings {
   modelClaude: string;
   modelCodex: string;
   modelStave: string;
+  /**
+   * User-configurable presets rendered in the preset bar between the task
+   * tab strip and the chat panel. Each preset either seeds a new task with a
+   * fixed provider + model, or launches a native CLI session.
+   */
+  taskPresets: TaskPreset[];
   /** Role-based defaults used by Stave Auto. */
   staveAutoClassifierModel: string;
   staveAutoSupervisorModel: string;
@@ -1074,6 +1085,20 @@ interface AppState {
     provider: "claude-code" | "codex";
     contextMode: CliSessionContextMode;
   }) => string | null;
+  /**
+   * Runs a preset from the preset bar. For `task` presets this aligns the
+   * provider draft + per-provider model settings and spawns a new task; for
+   * `cli-session` presets it opens a new CLI session tab.
+   */
+  applyTaskPreset: (args: { presetId: string }) => void;
+  /** Upserts a preset; creates a new entry if `presetId` is unknown. */
+  upsertTaskPreset: (args: { preset: TaskPreset }) => void;
+  removeTaskPreset: (args: { presetId: string }) => void;
+  reorderTaskPresets: (args: {
+    fromPresetId: string;
+    toPresetId: string;
+  }) => void;
+  resetTaskPresetsToDefault: () => void;
   setActiveCliSessionTab: (args: { tabId: string | null }) => void;
   setCliSessionTabNativeSession: (args: {
     tabId: string;
@@ -1586,6 +1611,7 @@ const defaultSettings: AppSettings = {
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
   modelStave: getDefaultModelForProvider({ providerId: "stave" }),
+  taskPresets: cloneDefaultTaskPresets(),
   ...DEFAULT_STAVE_AUTO_MODEL_SETTINGS,
   staveAutoOrchestrationMode: "auto",
   staveAutoMaxSubtasks: 3,
@@ -6371,6 +6397,11 @@ export const useAppStore = create<AppState>()(
                       value: patch.staveAutoRoleRuntimeOverrides,
                     }),
                 }),
+            ...(patch.taskPresets === undefined
+              ? {}
+              : {
+                  taskPresets: normalizePersistedTaskPresets(patch.taskPresets),
+                }),
             ...(patch.notificationSoundVolume === undefined
               ? {}
               : {
@@ -7452,6 +7483,124 @@ export const useAppStore = create<AppState>()(
           }));
 
           return nextTab.id;
+        },
+        applyTaskPreset: ({ presetId }) => {
+          const stateBefore = get();
+          const preset = stateBefore.settings.taskPresets.find(
+            (candidate) => candidate.id === presetId,
+          );
+          if (!preset) {
+            return;
+          }
+          if (preset.kind === "cli-session") {
+            if (preset.provider === "stave") {
+              // `stave` meta-provider has no native CLI binary.
+              return;
+            }
+            const cliProvider: Exclude<ProviderId, "stave"> = preset.provider;
+            get().createCliSessionTab({
+              provider: cliProvider,
+              contextMode: preset.contextMode ?? "workspace",
+            });
+            return;
+          }
+
+          // `task` preset: align the per-provider model setting + draft
+          // provider so the fresh task picks up the preset's model at turn
+          // request time (models are resolved from settings, not persisted
+          // per-task today).
+          const settingsPatch: Partial<AppSettings> = {};
+          if (preset.model) {
+            if (preset.provider === "claude-code") {
+              settingsPatch.modelClaude = preset.model;
+            } else if (preset.provider === "codex") {
+              settingsPatch.modelCodex = preset.model;
+            } else if (preset.provider === "stave") {
+              settingsPatch.modelStave = preset.model;
+            }
+          }
+          if (Object.keys(settingsPatch).length > 0) {
+            get().updateSettings({ patch: settingsPatch });
+          }
+          set((state) =>
+            state.draftProvider === preset.provider
+              ? state
+              : { draftProvider: preset.provider },
+          );
+          get().createTask({ title: "" });
+        },
+        upsertTaskPreset: ({ preset }) => {
+          set((state) => {
+            const presets = state.settings.taskPresets;
+            const existingIndex = presets.findIndex(
+              (candidate) => candidate.id === preset.id,
+            );
+            const nextPresets =
+              existingIndex >= 0
+                ? presets.map((candidate, index) =>
+                    index === existingIndex ? preset : candidate,
+                  )
+                : [...presets, preset];
+            return {
+              settings: {
+                ...state.settings,
+                taskPresets: nextPresets,
+              },
+            };
+          });
+        },
+        removeTaskPreset: ({ presetId }) => {
+          set((state) => {
+            const nextPresets = state.settings.taskPresets.filter(
+              (candidate) => candidate.id !== presetId,
+            );
+            if (nextPresets.length === state.settings.taskPresets.length) {
+              return state;
+            }
+            return {
+              settings: {
+                ...state.settings,
+                taskPresets: nextPresets,
+              },
+            };
+          });
+        },
+        reorderTaskPresets: ({ fromPresetId, toPresetId }) => {
+          if (fromPresetId === toPresetId) {
+            return;
+          }
+          set((state) => {
+            const presets = state.settings.taskPresets;
+            const fromIndex = presets.findIndex(
+              (candidate) => candidate.id === fromPresetId,
+            );
+            const toIndex = presets.findIndex(
+              (candidate) => candidate.id === toPresetId,
+            );
+            if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+              return state;
+            }
+            const nextPresets = [...presets];
+            const [moved] = nextPresets.splice(fromIndex, 1);
+            if (!moved) {
+              return state;
+            }
+            nextPresets.splice(toIndex, 0, moved);
+            return {
+              settings: {
+                ...state.settings,
+                taskPresets: nextPresets,
+              },
+            };
+          });
+        },
+        resetTaskPresetsToDefault: () => {
+          set((state) => ({
+            settings: {
+              ...state.settings,
+              taskPresets: cloneDefaultTaskPresets(),
+            },
+          }));
         },
         setActiveCliSessionTab: ({ tabId }) => {
           set((state) => {
@@ -11268,6 +11417,9 @@ export const useAppStore = create<AppState>()(
               (value: unknown): value is string => typeof value === "string",
             )
           : defaultSettings.commandPaletteRecentCommandIds;
+        state.settings.taskPresets = normalizePersistedTaskPresets(
+          raw.taskPresets,
+        );
         if (
           typeof raw.staveModelPlanner === "string" &&
           typeof raw.staveAutoPlanModel !== "string"
