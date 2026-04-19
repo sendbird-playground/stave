@@ -142,7 +142,7 @@ export function ModelSelector(args: ModelSelectorProps) {
               triggerClassName,
             )}
             disabled={disabled}
-            title="Open model selector (Alt+P)"
+            title="Open model selector (Alt+P). Use Alt+1..0 for mapped models."
           >
             <span className="flex min-w-0 items-center gap-1.5">
               <ModelIcon

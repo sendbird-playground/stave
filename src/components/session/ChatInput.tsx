@@ -50,6 +50,7 @@ import {
   resolveClaudeEffortForModelSwitch,
   providerSupportsNativeCommandCatalog,
 } from "@/lib/providers/model-catalog";
+import { normalizeModelShortcutKeys } from "@/lib/providers/model-shortcuts";
 import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
 import {
   CLAUDE_EFFORT_OPTIONS,
@@ -163,6 +164,7 @@ interface ChatInputComposerProps {
   selectedModelOption: ModelSelectorOption;
   modelOptions: ModelSelectorOption[];
   recommendedModelOptions: readonly ModelSelectorOption[];
+  modelShortcutKeys: readonly string[];
   commandPaletteItems: readonly CommandPaletteItem[];
   commandPaletteProviderNote?: CommandPaletteProviderNote;
   skillsEnabled: boolean;
@@ -715,6 +717,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           selectedModel={args.selectedModelOption}
           modelOptions={args.modelOptions}
           recommendedModelOptions={args.recommendedModelOptions}
+          modelShortcutKeys={args.modelShortcutKeys}
           attachedFilePaths={promptDraft.attachedFilePaths}
           promptHistoryEntries={promptHistoryEntries}
           promptSuggestions={promptSuggestions}
@@ -996,6 +999,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     skillsEnabled,
     skillsAutoSuggest,
     providerTimeoutMs,
+    modelShortcutKeys,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -1007,6 +1011,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.settings.skillsEnabled,
           state.settings.skillsAutoSuggest,
           state.settings.providerTimeoutMs,
+          state.settings.modelShortcutKeys,
         ] as const,
     ),
   );
@@ -1188,6 +1193,10 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
   const recommendedModelOptions = useMemo<ModelSelectorOption[]>(
     () => buildRecommendedModelSelectorOptions({ options: modelOptions }),
     [modelOptions],
+  );
+  const normalizedModelShortcutKeys = useMemo(
+    () => normalizeModelShortcutKeys(modelShortcutKeys),
+    [modelShortcutKeys],
   );
   const workspacePathLabel = useMemo(() => {
     return resolvePathBaseName({ path: workspaceCwd }) || undefined;
@@ -1667,6 +1676,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       selectedModelOption={selectedModelOption}
       modelOptions={modelOptions}
       recommendedModelOptions={recommendedModelOptions}
+      modelShortcutKeys={normalizedModelShortcutKeys}
       commandPaletteItems={deferredCommandPaletteItems}
       commandPaletteProviderNote={commandPalette.providerNote}
       skillsEnabled={skillsEnabled}

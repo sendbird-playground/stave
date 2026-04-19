@@ -3,6 +3,7 @@ import {
   inferProviderIdFromModel,
   toHumanModelName,
 } from "@/lib/providers/model-catalog";
+import { DEFAULT_MODEL_SHORTCUT_KEYS } from "@/lib/providers/model-shortcuts";
 import type { ProviderId } from "@/lib/providers/provider.types";
 
 export interface ModelSelectorOption {
@@ -27,9 +28,7 @@ export function shouldOpenModelSelector(args: {
 }
 
 const DEFAULT_RECOMMENDED_MODEL_SELECTOR_KEYS = [
-  "claude-code:claude-opus-4-7",
-  "codex:gpt-5.4",
-  "stave:stave-auto",
+  ...DEFAULT_MODEL_SHORTCUT_KEYS.slice(0, 3),
 ] as const;
 
 function buildModelSelectorOption(args: {

@@ -53,7 +53,9 @@ function resolveBundledPortlessPath() {
       return null;
     }
     const portlessEntryPath = fileURLToPath(portlessEntryUrl);
-    const candidate = toAsarUnpackedPath(path.resolve(path.dirname(portlessEntryPath), "cli.js"));
+    const candidate = toAsarUnpackedPath(
+      path.resolve(path.dirname(portlessEntryPath), "cli.js"),
+    );
     return canExecutePath({ path: candidate }) ? candidate : null;
   } catch {
     return null;
@@ -85,7 +87,7 @@ export function buildOrbitEnv(args: {
 export function tokenizeOrbitCommand(command: string) {
   const tokens: string[] = [];
   let current = "";
-  let quote: "'" | "\"" | null = null;
+  let quote: "'" | '"' | null = null;
   let escaping = false;
 
   const pushCurrent = () => {
@@ -113,8 +115,8 @@ export function tokenizeOrbitCommand(command: string) {
       continue;
     }
 
-    if (quote === "\"") {
-      if (char === "\"") {
+    if (quote === '"') {
+      if (char === '"') {
         quote = null;
       } else if (char === "\\") {
         escaping = true;
@@ -129,7 +131,7 @@ export function tokenizeOrbitCommand(command: string) {
       continue;
     }
 
-    if (char === "'" || char === "\"") {
+    if (char === "'" || char === '"') {
       quote = char;
       continue;
     }
@@ -176,14 +178,24 @@ export function buildOrbitRunArgs(args: {
   ];
 }
 
+export function buildOrbitShellWrapperRunArgs(args: {
+  command: string;
+  orbit: ResolvedWorkspaceScriptOrbitConfig;
+  defaultName: string;
+}) {
+  const childScript = `printf '%s%s\n' ${shellQuote(ORBIT_URL_MARKER)} "$PORTLESS_URL"; ${args.command}`;
+  return buildOrbitRunArgs({
+    commandArgs: ["sh", "-lc", childScript],
+    orbit: args.orbit,
+    defaultName: args.defaultName,
+  });
+}
+
 export function buildOrbitGetArgs(args: {
   orbit: ResolvedWorkspaceScriptOrbitConfig;
   defaultName: string;
 }) {
-  return [
-    "get",
-    sanitizeOrbitName(args.orbit.name || args.defaultName),
-  ];
+  return ["get", sanitizeOrbitName(args.orbit.name || args.defaultName)];
 }
 
 export function buildOrbitDisplayCommand(args: {
@@ -199,21 +211,42 @@ export function buildOrbitCommand(args: {
   defaultName: string;
   portlessCommand: string;
 }) {
-  const childScript = `printf '%s%s\n' ${shellQuote(ORBIT_URL_MARKER)} "$PORTLESS_URL"; ${args.command}`;
   return buildOrbitDisplayCommand({
     portlessCommand: args.portlessCommand,
-    orbitArgs: buildOrbitRunArgs({
-      commandArgs: ["sh", "-lc", childScript],
+    orbitArgs: buildOrbitShellWrapperRunArgs({
+      command: args.command,
       orbit: args.orbit,
       defaultName: args.defaultName,
     }),
   });
 }
 
-export function extractOrbitOutput(args: {
-  buffer: string;
-  chunk: string;
+function usesNodeScriptInterpreter(command: string) {
+  return [".js", ".cjs", ".mjs"].includes(path.extname(command).toLowerCase());
+}
+
+export function buildPortlessLaunchSpec(args: {
+  portlessCommand: string;
+  orbitArgs: string[];
 }) {
+  if (!usesNodeScriptInterpreter(args.portlessCommand)) {
+    return {
+      command: args.portlessCommand,
+      args: args.orbitArgs,
+      env: {} as Record<string, string>,
+    };
+  }
+
+  return {
+    command: process.execPath,
+    args: [args.portlessCommand, ...args.orbitArgs],
+    env: {
+      ELECTRON_RUN_AS_NODE: "1",
+    },
+  };
+}
+
+export function extractOrbitOutput(args: { buffer: string; chunk: string }) {
   const combined = args.buffer + args.chunk;
   const lines = combined.split(/\r?\n/);
   if (combined.endsWith("\n")) {
@@ -237,6 +270,7 @@ export function extractOrbitOutput(args: {
   return {
     buffer: nextBuffer,
     orbitUrls,
-    output: passthroughLines.length > 0 ? `${passthroughLines.join("\n")}\n` : "",
+    output:
+      passthroughLines.length > 0 ? `${passthroughLines.join("\n")}\n` : "",
   };
 }

@@ -77,6 +77,7 @@ import {
   normalizeModelSelection,
   upgradeSettingsScopedClaudeOpusModel,
 } from "@/lib/providers/model-catalog";
+import { normalizeModelShortcutKeys } from "@/lib/providers/model-shortcuts";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
   DEFAULT_PROMPT_PR_DESCRIPTION,
@@ -814,6 +815,8 @@ export interface AppSettings {
   commandPalettePinnedCommandIds: string[];
   commandPaletteHiddenCommandIds: string[];
   commandPaletteRecentCommandIds: string[];
+  /** Alt+1..0 prompt-model bindings, stored as `provider:model` keys. */
+  modelShortcutKeys: string[];
   reviewStrictMode: boolean;
   reviewChecklistPreset: string;
   terminalFontSize: number;
@@ -1640,6 +1643,7 @@ const defaultSettings: AppSettings = {
   commandPalettePinnedCommandIds: [],
   commandPaletteHiddenCommandIds: [],
   commandPaletteRecentCommandIds: [],
+  modelShortcutKeys: normalizeModelShortcutKeys(),
   reviewStrictMode: true,
   reviewChecklistPreset: "safety-first",
   terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
@@ -2044,6 +2048,110 @@ async function closeTerminalSessionsForWorkspaces(workspaceIds: string[]) {
       }),
     ]),
   );
+}
+
+const activeWorkspaceArchiveCleanups = new Set<Promise<void>>();
+
+/**
+ * Wait for every background workspace-archive cleanup promise to settle.
+ * Archive cleanup (git worktree removal, branch deletion, persistence close)
+ * runs detached so the UI can archive a workspace instantly. Tests and
+ * shutdown code paths can use this to observe the real completion of that
+ * deferred work.
+ */
+export async function waitForPendingWorkspaceArchiveCleanups(): Promise<void> {
+  while (activeWorkspaceArchiveCleanups.size > 0) {
+    const pending = Array.from(activeWorkspaceArchiveCleanups);
+    await Promise.allSettled(pending);
+  }
+}
+
+function startWorkspaceArchiveCleanup(args: {
+  workspaceId: string;
+  workspacePath?: string;
+  workspaceBranch?: string;
+  projectPath?: string | null;
+}): void {
+  const promise = performWorkspaceArchiveCleanup(args);
+  activeWorkspaceArchiveCleanups.add(promise);
+  promise
+    .catch((error) => {
+      console.error(
+        "[workspace-archive] background cleanup rejected",
+        args,
+        error,
+      );
+    })
+    .finally(() => {
+      activeWorkspaceArchiveCleanups.delete(promise);
+    });
+}
+
+async function performWorkspaceArchiveCleanup(args: {
+  workspaceId: string;
+  workspacePath?: string;
+  workspaceBranch?: string;
+  projectPath?: string | null;
+}) {
+  const { workspaceId, workspacePath, workspaceBranch, projectPath } = args;
+  try {
+    const stopWorkspaceScripts = window.api?.scripts?.stopAll;
+    if (stopWorkspaceScripts) {
+      await stopWorkspaceScripts({ workspaceId });
+    }
+  } catch (error) {
+    console.error(
+      "[workspace-archive] stopScripts failed",
+      { workspaceId },
+      error,
+    );
+  }
+  try {
+    await closeTerminalSessionsForWorkspaces([workspaceId]);
+  } catch (error) {
+    console.error(
+      "[workspace-archive] closeTerminalSessions failed",
+      { workspaceId },
+      error,
+    );
+  }
+  const runner = window.api?.terminal?.runCommand;
+  if (runner && projectPath && workspacePath) {
+    try {
+      const removeResult = await runner({
+        cwd: projectPath,
+        command: `git worktree remove --force ${JSON.stringify(workspacePath)}`,
+      });
+      if (!removeResult.ok) {
+        await runner({
+          cwd: projectPath,
+          command: `rm -rf ${JSON.stringify(workspacePath)}`,
+        });
+        await runner({ cwd: projectPath, command: "git worktree prune" });
+      }
+      if (workspaceBranch) {
+        await runner({
+          cwd: projectPath,
+          command: `git branch -D ${JSON.stringify(workspaceBranch)}`,
+        });
+      }
+    } catch (error) {
+      console.error(
+        "[workspace-archive] git cleanup failed",
+        { workspaceId, workspacePath, workspaceBranch },
+        error,
+      );
+    }
+  }
+  try {
+    await closeWorkspacePersistence({ workspaceId });
+  } catch (error) {
+    console.error(
+      "[workspace-archive] closeWorkspacePersistence failed",
+      { workspaceId },
+      error,
+    );
+  }
 }
 
 function shouldReloadWorkspaceShellFromPersistence(args: {
@@ -5766,36 +5874,14 @@ export const useAppStore = create<AppState>()(
           const workspacePath = state.workspacePathById[workspaceId];
           const workspaceBranch = state.workspaceBranchById[workspaceId];
           const projectPath = state.projectPath;
-          const runner = window.api?.terminal?.runCommand;
-          const stopWorkspaceScripts = window.api?.scripts?.stopAll;
-          if (stopWorkspaceScripts) {
-            await stopWorkspaceScripts({ workspaceId });
-          }
-          await closeTerminalSessionsForWorkspaces([workspaceId]);
-          if (runner && projectPath && workspacePath) {
-            const removeResult = await runner({
-              cwd: projectPath,
-              command: `git worktree remove --force ${JSON.stringify(workspacePath)}`,
-            });
-            if (!removeResult.ok) {
-              await runner({
-                cwd: projectPath,
-                command: `rm -rf ${JSON.stringify(workspacePath)}`,
-              });
-              await runner({ cwd: projectPath, command: "git worktree prune" });
-            }
-            if (workspaceBranch) {
-              await runner({
-                cwd: projectPath,
-                command: `git branch -D ${JSON.stringify(workspaceBranch)}`,
-              });
-            }
-          }
-          await closeWorkspacePersistence({ workspaceId });
+          // Pick the replacement active workspace, ignoring the one being archived.
           const nextWorkspace =
             state.workspaces.find(
-              (item) => state.workspaceDefaultById[item.id],
-            ) ?? state.workspaces[0];
+              (item) =>
+                item.id !== workspaceId &&
+                state.workspaceDefaultById[item.id],
+            ) ??
+            state.workspaces.find((item) => item.id !== workspaceId);
           if (!nextWorkspace) {
             const workspaceState = buildWorkspaceSessionState({
               snapshot: null,
@@ -5842,6 +5928,12 @@ export const useAppStore = create<AppState>()(
                 },
               };
             });
+            startWorkspaceArchiveCleanup({
+              workspaceId,
+              workspacePath,
+              workspaceBranch,
+              projectPath,
+            });
             return;
           }
           await get().switchWorkspace({ workspaceId: nextWorkspace.id });
@@ -5875,6 +5967,12 @@ export const useAppStore = create<AppState>()(
               workspaceRuntimeCacheById: nextRuntimeCacheById,
               taskWorkspaceIdById: nextTaskWorkspaceIdById,
             };
+          });
+          startWorkspaceArchiveCleanup({
+            workspaceId,
+            workspacePath,
+            workspaceBranch,
+            projectPath,
           });
         },
         switchWorkspace: async ({ workspaceId }) => {
@@ -6359,6 +6457,13 @@ export const useAppStore = create<AppState>()(
               : {
                   sharedSkillsHome: normalizeSharedSkillsHomeSetting(
                     patch.sharedSkillsHome,
+                  ),
+                }),
+            ...(patch.modelShortcutKeys === undefined
+              ? {}
+              : {
+                  modelShortcutKeys: normalizeModelShortcutKeys(
+                    patch.modelShortcutKeys,
                   ),
                 }),
             ...(patch.reasoningExpansionMode === undefined
@@ -11419,6 +11524,9 @@ export const useAppStore = create<AppState>()(
           : defaultSettings.commandPaletteRecentCommandIds;
         state.settings.taskPresets = normalizePersistedTaskPresets(
           raw.taskPresets,
+        );
+        state.settings.modelShortcutKeys = normalizeModelShortcutKeys(
+          raw.modelShortcutKeys,
         );
         if (
           typeof raw.staveModelPlanner === "string" &&
