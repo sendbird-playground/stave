@@ -55,6 +55,8 @@ export interface WorkspaceSyncStatus {
   detail: string;
   hasOriginRemote: boolean;
   hasOriginMain: boolean;
+  /** The detected default branch ref, e.g. "origin/main" or "origin/master". Null if not found. */
+  baseBranch: string | null;
   canFastForwardOriginMain: boolean;
   recommendedCommand: string | null;
 }

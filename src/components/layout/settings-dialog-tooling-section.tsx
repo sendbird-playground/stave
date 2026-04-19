@@ -115,7 +115,7 @@ function WorkspaceStateLabel(state: WorkspaceSyncStatus["state"]) {
     case "missing-origin":
       return "No Origin";
     case "missing-origin-main":
-      return "No origin/main";
+      return "No default branch";
     case "not-git":
       return "Not Git";
     default:
@@ -482,7 +482,7 @@ export function ToolingSection() {
       <SectionStack>
         <SettingsCard
           title="Current Workspace"
-          description="Track how the active workspace relates to origin/main, then fast-forward safely when no local commits or uncommitted edits block the update."
+          description="Track how the active workspace relates to the default remote branch (origin/main or origin/master), then fast-forward safely when no local commits or uncommitted edits block the update."
         >
           <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/80 bg-background/80 px-4 py-3">
             <div className="space-y-2">
@@ -504,7 +504,7 @@ export function ToolingSection() {
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
                   {workspace?.summary
-                    ?? "Open a workspace to inspect origin/main sync status."}
+                    ?? "Open a workspace to inspect sync status."}
                 </p>
                 <p className="break-all text-sm text-muted-foreground">
                   {workspaceCwd ?? "No active workspace path is selected."}
@@ -549,7 +549,7 @@ export function ToolingSection() {
                 ) : (
                   <CheckCircle2 className="size-4" />
                 )}
-                Sync origin/main
+                Sync {workspace?.baseBranch ?? "origin/main"}
               </Button>
             </div>
           </div>
