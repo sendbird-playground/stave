@@ -80,6 +80,13 @@ export const PUBLIC_DOC_SECTIONS: PublicDocSection[] = [
           "Run the same prompt across 2–4 models in parallel, compare answers side by side, and promote one winner into your task.",
         previewImage: "screenshots/coliseum-arena.png",
       },
+      {
+        routePath: "stave-model-router",
+        sourcePath: "docs/features/stave-model-router.md",
+        title: "Stave Model Router",
+        description:
+          "Let Stave Auto choose the best model for each turn and understand how the built-in router decides between direct and orchestrated execution.",
+      },
     ],
   },
   {
