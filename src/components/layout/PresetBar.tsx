@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState, type FormEvent } from "react";
-import { Ellipsis, Plus, SquareTerminal } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Cog, Ellipsis, Plus, SquareTerminal } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
 import {
@@ -9,31 +9,19 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Input,
   Popover,
   PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from "@/components/ui";
 import {
   getDefaultModelForProvider,
   toHumanModelName,
 } from "@/lib/providers/model-catalog";
-import type { ProviderId } from "@/lib/providers/provider.types";
-import {
-  generatePresetId,
-  listModelsForPresetProvider,
-  normalizeTaskPreset,
-  type TaskPreset,
-  type TaskPresetKind,
-} from "@/lib/task-presets";
+import { generatePresetId, type TaskPreset } from "@/lib/task-presets";
 import { cn } from "@/lib/utils";
-import { useAppStore } from "@/store/app.store";
+import { STAVE_OPEN_SETTINGS_EVENT, useAppStore } from "@/store/app.store";
+import { TaskPresetEditor } from "@/components/layout/task-preset-editor";
 
 type PresetEditorTarget =
   | { kind: "edit"; presetId: string }
@@ -97,6 +85,14 @@ export function PresetBar() {
     [removeTaskPreset],
   );
 
+  const handleOpenPresetSettings = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent(STAVE_OPEN_SETTINGS_EVENT, {
+        detail: { section: "presets" },
+      }),
+    );
+  }, []);
+
   // Regenerate the draft id every time the "new" popover transitions open so
   // successive adds don't collide on the same id (`upsertTaskPreset` treats
   // the id as the upsert key).
@@ -115,67 +111,81 @@ export function PresetBar() {
   return (
     <div
       className={cn(
-        "flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto",
+        "flex min-w-0 shrink-0 items-center gap-2",
         "border-b border-border/70 bg-muted/20 px-2 py-1",
       )}
       data-testid="preset-bar"
     >
-      {presets.map((preset) => (
-        <PresetChip
-          key={preset.id}
-          preset={preset}
-          isEditing={
-            editorTarget?.kind === "edit" &&
-            editorTarget.presetId === preset.id
-          }
-          onApply={handleApply}
-          onRequestEdit={() =>
-            setEditorTarget({ kind: "edit", presetId: preset.id })
-          }
-          onCloseEditor={() => setEditorTarget(null)}
-          onSave={handleSavePreset}
-          onDelete={() => handleDeletePreset(preset.id)}
-        />
-      ))}
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        {presets.map((preset) => (
+          <PresetChip
+            key={preset.id}
+            preset={preset}
+            isEditing={
+              editorTarget?.kind === "edit" &&
+              editorTarget.presetId === preset.id
+            }
+            onApply={handleApply}
+            onRequestEdit={() =>
+              setEditorTarget({ kind: "edit", presetId: preset.id })
+            }
+            onCloseEditor={() => setEditorTarget(null)}
+            onSave={handleSavePreset}
+            onDelete={() => handleDeletePreset(preset.id)}
+          />
+        ))}
 
-      <Popover
-        open={editorTarget?.kind === "new"}
-        onOpenChange={(open) =>
-          setEditorTarget(open ? { kind: "new" } : null)
-        }
-      >
-        <PopoverTrigger asChild>
+        {presets.length === 0 ? (
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
-            aria-label="Add preset"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => resetTaskPresetsToDefault()}
           >
-            <Plus className="size-3.5" />
+            Restore default presets
           </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-72">
-          <PresetEditor
-            initialPreset={newPresetDraft}
-            submitLabel="Add preset"
-            onSave={handleSavePreset}
-            onCancel={() => setEditorTarget(null)}
-          />
-        </PopoverContent>
-      </Popover>
+        ) : null}
+      </div>
 
-      {presets.length === 0 ? (
+      <div className="flex shrink-0 items-center gap-1">
+        <Popover
+          open={editorTarget?.kind === "new"}
+          onOpenChange={(open) =>
+            setEditorTarget(open ? { kind: "new" } : null)
+          }
+        >
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+              aria-label="Add preset"
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72">
+            <TaskPresetEditor
+              initialPreset={newPresetDraft}
+              submitLabel="Add preset"
+              onSave={handleSavePreset}
+              onCancel={() => setEditorTarget(null)}
+            />
+          </PopoverContent>
+        </Popover>
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => resetTaskPresetsToDefault()}
+          size="icon"
+          className="h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+          aria-label="Manage presets"
+          onClick={handleOpenPresetSettings}
         >
-          Restore default presets
+          <Cog className="size-3.5" />
         </Button>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -191,8 +201,15 @@ interface PresetChipProps {
 }
 
 function PresetChip(props: PresetChipProps) {
-  const { preset, isEditing, onApply, onRequestEdit, onCloseEditor, onSave, onDelete } =
-    props;
+  const {
+    preset,
+    isEditing,
+    onApply,
+    onRequestEdit,
+    onCloseEditor,
+    onSave,
+    onDelete,
+  } = props;
 
   return (
     <Popover
@@ -266,7 +283,7 @@ function PresetChip(props: PresetChipProps) {
         </div>
       </PopoverAnchor>
       <PopoverContent align="start" className="w-72">
-        <PresetEditor
+        <TaskPresetEditor
           initialPreset={preset}
           submitLabel="Save"
           onSave={onSave}
@@ -285,158 +302,4 @@ function buildChipTitle(preset: TaskPreset) {
     return `${preset.label} — ${toHumanModelName({ model: preset.model })}`;
   }
   return preset.label;
-}
-
-interface PresetEditorProps {
-  initialPreset: TaskPreset;
-  submitLabel: string;
-  onSave: (preset: TaskPreset) => void;
-  onCancel: () => void;
-}
-
-function PresetEditor(props: PresetEditorProps) {
-  const { initialPreset, submitLabel, onSave, onCancel } = props;
-  const [kind, setKind] = useState<TaskPresetKind>(initialPreset.kind);
-  const [provider, setProvider] = useState<ProviderId>(initialPreset.provider);
-  const [model, setModel] = useState<string>(
-    initialPreset.model ??
-      getDefaultModelForProvider({ providerId: initialPreset.provider }),
-  );
-  const [label, setLabel] = useState<string>(initialPreset.label);
-
-  const modelOptions = useMemo(
-    () => listModelsForPresetProvider(provider),
-    [provider],
-  );
-  const providerOptions = useMemo<{ value: ProviderId; label: string }[]>(() => {
-    if (kind === "cli-session") {
-      return [
-        { value: "claude-code", label: "Claude" },
-        { value: "codex", label: "Codex" },
-      ];
-    }
-    return [
-      { value: "claude-code", label: "Claude Code" },
-      { value: "codex", label: "Codex" },
-      { value: "stave", label: "Stave Auto" },
-    ];
-  }, [kind]);
-
-  const handleKindChange = (nextKindValue: string) => {
-    const nextKind: TaskPresetKind =
-      nextKindValue === "cli-session" ? "cli-session" : "task";
-    setKind(nextKind);
-    if (nextKind === "cli-session" && provider === "stave") {
-      const fallback: ProviderId = "claude-code";
-      setProvider(fallback);
-      setModel(getDefaultModelForProvider({ providerId: fallback }));
-    }
-  };
-
-  const handleProviderChange = (nextProvider: string) => {
-    const providerId =
-      nextProvider === "claude-code" ||
-      nextProvider === "codex" ||
-      nextProvider === "stave"
-        ? (nextProvider as ProviderId)
-        : "claude-code";
-    setProvider(providerId);
-    const nextModels = listModelsForPresetProvider(providerId);
-    if (!nextModels.includes(model)) {
-      setModel(getDefaultModelForProvider({ providerId }));
-    }
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalized = normalizeTaskPreset({
-      id: initialPreset.id,
-      label,
-      kind,
-      provider,
-      model,
-    });
-    onSave(normalized);
-  };
-
-  return (
-    <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="preset-editor-label"
-          className="text-xs font-medium text-muted-foreground"
-        >
-          Label
-        </label>
-        <Input
-          id="preset-editor-label"
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          placeholder="Opus 4.7"
-          autoFocus
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Type</span>
-        <Select value={kind} onValueChange={handleKindChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="task">Task</SelectItem>
-            <SelectItem value="cli-session">CLI session</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">
-          Provider
-        </span>
-        <Select value={provider} onValueChange={handleProviderChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {providerOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {kind === "task" ? (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            Model
-          </span>
-          <Select value={model} onValueChange={setModel}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {modelOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {toHumanModelName({ model: option })}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" size="sm">
-          {submitLabel}
-        </Button>
-      </div>
-    </form>
-  );
 }

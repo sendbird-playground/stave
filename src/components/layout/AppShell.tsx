@@ -30,10 +30,11 @@ import { QuitConfirmationDialog } from "@/components/layout/QuitConfirmationDial
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { isTaskArchived } from "@/lib/tasks";
+import { resolveTaskPresetShortcutSlot } from "@/lib/task-presets";
 import { RenderProfiler } from "@/lib/render-profiler";
 import {
   MIN_EDITOR_PANEL_WIDTH,
-  STAVE_MUSE_OPEN_SETTINGS_EVENT,
+  STAVE_OPEN_SETTINGS_EVENT,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   useAppStore,
 } from "@/store/app.store";
@@ -176,6 +177,7 @@ export function AppShell() {
         ] as const,
     ),
   );
+  const showPresetBar = useAppStore((state) => state.settings.showPresetBar);
   const zenMode = appShellMode === "zen";
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
@@ -518,6 +520,24 @@ export function AppShell() {
         return;
       }
 
+      const presetShortcutSlot = resolveTaskPresetShortcutSlot({
+        key: event.key,
+        code: event.code,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+      });
+      if (presetShortcutSlot !== null) {
+        const preset = store.settings.taskPresets[presetShortcutSlot] ?? null;
+        if (preset) {
+          event.preventDefault();
+          event.stopPropagation();
+          store.applyTaskPreset({ presetId: preset.id });
+          return;
+        }
+      }
+
       if (
         hasMod &&
         !event.altKey &&
@@ -755,7 +775,7 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    const handleMuseOpenSettings = (event: Event) => {
+    const handleOpenSettingsEvent = (event: Event) => {
       const customEvent = event as CustomEvent<{
         projectPath?: string | null;
         section?: SectionId;
@@ -767,13 +787,13 @@ export function AppShell() {
     };
 
     window.addEventListener(
-      STAVE_MUSE_OPEN_SETTINGS_EVENT,
-      handleMuseOpenSettings as EventListener,
+      STAVE_OPEN_SETTINGS_EVENT,
+      handleOpenSettingsEvent as EventListener,
     );
     return () => {
       window.removeEventListener(
-        STAVE_MUSE_OPEN_SETTINGS_EVENT,
-        handleMuseOpenSettings as EventListener,
+        STAVE_OPEN_SETTINGS_EVENT,
+        handleOpenSettingsEvent as EventListener,
       );
     };
   }, [handleOpenSettings]);
@@ -812,7 +832,10 @@ export function AppShell() {
       return;
     }
     const win = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      requestIdleCallback?: (
+        cb: () => void,
+        opts?: { timeout?: number },
+      ) => number;
       cancelIdleCallback?: (handle: number) => void;
     };
     const schedule = win.requestIdleCallback
@@ -1295,7 +1318,7 @@ export function AppShell() {
               >
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   {hasProject ? <WorkspaceTaskTabs /> : null}
-                  {hasProject ? <PresetBar /> : null}
+                  {hasProject && showPresetBar ? <PresetBar /> : null}
                   <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
