@@ -1,6 +1,6 @@
 import { Suspense, lazy, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, Card, ImageLightbox } from "@/components/ui";
 import {
   CodeBlock,
   CodeBlockActions,
@@ -18,9 +18,7 @@ import {
   formatWorkspaceFilePathForDisplay,
   resolveWorkspaceRelativeFilePath,
 } from "@/lib/workspace-file-path";
-import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { toBaseName } from "@/lib/message-file-links";
-import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { CodeDiffPart, FileContextPart, ImageContextPart } from "@/types/chat";
@@ -431,10 +429,6 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
 
 export function ImageAttachmentBlock(args: { parts: ImageContextPart[] }) {
   const [previewSrc, setPreviewSrc] = useState<{ dataUrl: string; label: string } | null>(null);
-  const { containerRef, handleKeyDown } = useDismissibleLayer<HTMLDivElement>({
-    enabled: Boolean(previewSrc),
-    onDismiss: () => setPreviewSrc(null),
-  });
 
   return (
     <>
@@ -452,39 +446,13 @@ export function ImageAttachmentBlock(args: { parts: ImageContextPart[] }) {
           </div>
         ))}
       </div>
-      {previewSrc ? (
-        <div
-          ref={containerRef}
-          className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image full screen preview"
-          tabIndex={-1}
-          onKeyDown={handleKeyDown}
-          onClick={() => setPreviewSrc(null)}
-        >
-          <button
-            type="button"
-            className="absolute right-4 top-4 rounded-sm border border-border/80 bg-card/90 px-2 py-1 text-sm text-foreground hover:bg-accent"
-            onClick={(event) => {
-              event.stopPropagation();
-              setPreviewSrc(null);
-            }}
-          >
-            Close
-          </button>
-          <img
-            src={previewSrc.dataUrl}
-            alt={previewSrc.label}
-            className="max-h-full max-w-full cursor-zoom-out object-contain"
-            title="Click to close"
-            onClick={(event) => {
-              event.stopPropagation();
-              setPreviewSrc(null);
-            }}
-          />
-        </div>
-      ) : null}
+      <ImageLightbox
+        open={Boolean(previewSrc)}
+        imageSrc={previewSrc?.dataUrl ?? ""}
+        alt={previewSrc?.label ?? "Image preview"}
+        imageTitle="Click to close"
+        onClose={() => setPreviewSrc(null)}
+      />
     </>
   );
 }

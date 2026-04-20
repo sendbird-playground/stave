@@ -43,6 +43,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
+  ImageLightbox,
   Kbd,
   KbdGroup,
   Popover,
@@ -68,7 +69,6 @@ import {
   getActiveSlashCommandTokenMatch,
   replaceSlashCommandToken,
 } from "@/lib/commands";
-import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import {
   getActiveSkillTokenMatch,
@@ -413,13 +413,6 @@ export function PromptInput(args: PromptInputProps) {
     dataUrl: string;
     label: string;
   } | null>(null);
-  const {
-    containerRef: imagePreviewRef,
-    handleKeyDown: handleImagePreviewKeyDown,
-  } = useDismissibleLayer<HTMLDivElement>({
-    enabled: Boolean(imagePreviewSrc),
-    onDismiss: () => setImagePreviewSrc(null),
-  });
   const [dismissedCommandToken, setDismissedCommandToken] = useState<
     string | null
   >(null);
@@ -1998,42 +1991,13 @@ export function PromptInput(args: PromptInputProps) {
           </div>
         </div>
       </form>
-      {imagePreviewSrc ? (
-        <div
-          ref={imagePreviewRef}
-          className={cn(
-            UI_LAYER_CLASS.lightbox,
-            "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]",
-          )}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image full screen preview"
-          tabIndex={-1}
-          onKeyDown={handleImagePreviewKeyDown}
-          onClick={() => setImagePreviewSrc(null)}
-        >
-          <button
-            type="button"
-            className="absolute right-4 top-4 rounded-sm border border-border/80 bg-card/90 px-2 py-1 text-sm text-foreground hover:bg-accent"
-            onClick={(event) => {
-              event.stopPropagation();
-              setImagePreviewSrc(null);
-            }}
-          >
-            Close
-          </button>
-          <img
-            src={imagePreviewSrc.dataUrl}
-            alt={imagePreviewSrc.label}
-            className="max-h-full max-w-full cursor-zoom-out object-contain"
-            title="Click to close"
-            onClick={(event) => {
-              event.stopPropagation();
-              setImagePreviewSrc(null);
-            }}
-          />
-        </div>
-      ) : null}
+      <ImageLightbox
+        open={Boolean(imagePreviewSrc)}
+        imageSrc={imagePreviewSrc?.dataUrl ?? ""}
+        alt={imagePreviewSrc?.label ?? "Image preview"}
+        imageTitle="Click to close"
+        onClose={() => setImagePreviewSrc(null)}
+      />
     </>
   );
 }

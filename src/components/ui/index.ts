@@ -57,6 +57,7 @@ export {
   DropdownMenuTrigger,
 } from "./dropdown-menu";
 export { Input } from "./input";
+export { ImageLightbox } from "./image-lightbox";
 export {
   InputGroup,
   InputGroupAddon,
