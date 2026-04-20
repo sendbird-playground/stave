@@ -1,3 +1,16 @@
+## [0.4.2](https://github.com/sendbird-playground/stave/compare/v0.4.1...v0.4.2) (2026-04-20)
+
+### Highlights
+
+- add an editor markdown preview mode with toolbar integration and regression coverage so previewing longer notes no longer depends on raw source-only editing
+- make Coliseum default-model selection consistent across the launcher and reviewer dialogs, and refresh the related docs screenshots and launcher guidance
+- fix floating Plan and Todo overlays so they stay in the chat pane stacking context instead of slipping behind or conflicting with the input dock
+
+### References
+
+- [#514](https://github.com/sendbird-playground/stave/pull/514)
+- [#515](https://github.com/sendbird-playground/stave/pull/515)
+- [#516](https://github.com/sendbird-playground/stave/pull/516)
 ## [0.4.1](https://github.com/sendbird-playground/stave/compare/v0.4.0...v0.4.1) (2026-04-20)
 
 ### Highlights
