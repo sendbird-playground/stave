@@ -72,7 +72,7 @@ Recommended next steps:
 
 ## Features
 
-- task-based Claude and Codex chats with approvals, diffs, plans, and queued follow-ups
+- task-based Claude and Codex chats with approvals, diffs, plans, queued follow-ups, and Coliseum multi-model comparisons
 - Monaco editor, docked terminal, quick open, command palette, and source control actions
 - workspace-scoped notes, todos, saved plans, PR links, Jira, Figma, Confluence, and Slack references
 - git worktree-aware project and workspace management
@@ -83,6 +83,7 @@ Recommended next steps:
 
 - [Docs site](https://shiny-barnacle-5vmm96j.pages.github.io/docs/) for end-user install, workflow, and feature reference
 - [Install Guide](docs/install-guide.md) for the full macOS install and update flow
+- [Coliseum Guide](docs/features/coliseum.md) for side-by-side multi-model comparisons and winner promotion
 - [Provider Sandbox and Approval Guide](docs/features/provider-sandbox-and-approval.md) for runtime safety and plan settings
 - [Local MCP User Guide](docs/features/local-mcp-user-guide.md) for same-machine automation setup
 

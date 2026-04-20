@@ -1,3 +1,31 @@
+## [0.4.0](https://github.com/sendbird-playground/stave/compare/v0.3.9...v0.4.0) (2026-04-20)
+
+### Highlights
+
+- launch **Coliseum**, a new side-by-side multi-model execution flow that fans a prompt out to 2-4 providers, hides the temporary branches from the normal task UI, and lets users promote a winning answer back into the parent task
+- extend Coliseum with reviewer runs, partial-pick follow-up drafting, shared file attachments, `Cmd/Ctrl+Enter` submit, sidebar activity indicators, and launcher/layout polish across the arena and prompt surfaces
+- add a keyboard-aware preset bar to the task shell, including settings-based preset management and ordering, `Ctrl+1-9` preset launch shortcuts, and a unified `+` launcher for new tasks and CLI sessions
+- formalize workspace handoff through `.stave/context/plans/<taskIdPrefix>_<timestamp>.md` plan files, inject that convention into task awareness and canonical request context, and document the workflow in repo policy files
+- harden Claude and shared provider runtime flows by tightening plan-mode behavior, adding approval-decision timeout protection, and hiding transient "sending request to model" system events from the assistant trace
+- fix approval notification state so approvals mark the correct message/request as read without cross-task or cross-workspace collisions, and improve tooling sync status when a repo exposes `origin/master` instead of `origin/main`
+- polish desktop UX around the keyboard-shortcuts drawer and image lightbox layering, and refresh the top-level README to point users at the new Coliseum documentation
+
+### References
+
+- [#496](https://github.com/sendbird-playground/stave/pull/496)
+- [#497](https://github.com/sendbird-playground/stave/pull/497)
+- [#498](https://github.com/sendbird-playground/stave/pull/498)
+- [#499](https://github.com/sendbird-playground/stave/pull/499)
+- [#500](https://github.com/sendbird-playground/stave/pull/500)
+- [#501](https://github.com/sendbird-playground/stave/pull/501)
+- [#502](https://github.com/sendbird-playground/stave/pull/502)
+- [#503](https://github.com/sendbird-playground/stave/pull/503)
+- [#504](https://github.com/sendbird-playground/stave/pull/504)
+- [#505](https://github.com/sendbird-playground/stave/pull/505)
+- [#506](https://github.com/sendbird-playground/stave/pull/506)
+- [#507](https://github.com/sendbird-playground/stave/pull/507)
+- [#508](https://github.com/sendbird-playground/stave/pull/508)
+- [#509](https://github.com/sendbird-playground/stave/pull/509)
 ## [0.3.9](https://github.com/sendbird-playground/stave/compare/v0.3.8...v0.3.9) (2026-04-19)
 
 ### Highlights
