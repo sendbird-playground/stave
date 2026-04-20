@@ -1,4 +1,8 @@
-import type { BridgeEvent, StreamTurnArgs } from "./types";
+import type {
+  BridgeEvent,
+  ProviderResponderResult,
+  StreamTurnArgs,
+} from "./types";
 import type {
   ConnectedToolId,
   ConnectedToolStatusEntry,
@@ -2913,14 +2917,17 @@ export async function streamCodexWithAppServer(
     onEvent?: (event: BridgeEvent) => void;
     registerAbort?: (aborter: () => void) => void;
     registerApprovalResponder?: (
-      responder: (args: { requestId: string; approved: boolean }) => boolean,
+      responder: (args: {
+        requestId: string;
+        approved: boolean;
+      }) => ProviderResponderResult,
     ) => void;
     registerUserInputResponder?: (
       responder: (args: {
         requestId: string;
         answers?: Record<string, string>;
         denied?: boolean;
-      }) => boolean,
+      }) => ProviderResponderResult,
     ) => void;
   },
 ): Promise<BridgeEvent[] | null> {
@@ -3110,7 +3117,11 @@ export async function streamCodexWithAppServer(
   args.registerApprovalResponder?.(({ requestId, approved }) => {
     const pending = pendingApprovalRequests.get(requestId);
     if (!pending) {
-      return false;
+      return {
+        ok: false,
+        reason: "unknown-request",
+        pendingRequestIds: Array.from(pendingApprovalRequests.keys()),
+      };
     }
     pendingApprovalRequests.delete(requestId);
     void client
@@ -3145,13 +3156,17 @@ export async function streamCodexWithAppServer(
         })(),
       )
       .finally(() => elicitationPauseController.end(requestId));
-    return true;
+    return { ok: true };
   });
 
   args.registerUserInputResponder?.(({ requestId, answers, denied }) => {
     const pending = pendingUserInputRequests.get(requestId);
     if (!pending) {
-      return false;
+      return {
+        ok: false,
+        reason: "unknown-request",
+        pendingRequestIds: Array.from(pendingUserInputRequests.keys()),
+      };
     }
     pendingUserInputRequests.delete(requestId);
     if (pending.responseKind === "elicitation") {
@@ -3161,7 +3176,7 @@ export async function streamCodexWithAppServer(
             action: "decline",
           })
           .finally(() => elicitationPauseController.end(requestId));
-        return true;
+        return { ok: true };
       }
 
       if (pending.elicitationMode === "url") {
@@ -3170,7 +3185,7 @@ export async function streamCodexWithAppServer(
             action: "accept",
           })
           .finally(() => elicitationPauseController.end(requestId));
-        return true;
+        return { ok: true };
       }
 
       const content = Object.fromEntries(
@@ -3192,7 +3207,7 @@ export async function streamCodexWithAppServer(
           content,
         })
         .finally(() => elicitationPauseController.end(requestId));
-      return true;
+      return { ok: true };
     }
 
     const responseAnswers = Object.fromEntries(
@@ -3206,7 +3221,7 @@ export async function streamCodexWithAppServer(
         answers: denied ? {} : responseAnswers,
       })
       .finally(() => elicitationPauseController.end(requestId));
-    return true;
+    return { ok: true };
   });
 
   const unsubscribe = client.subscribe((message) => {

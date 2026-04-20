@@ -1,4 +1,8 @@
-import type { BridgeEvent, StreamTurnArgs } from "./types";
+import type {
+  BridgeEvent,
+  ProviderResponderResult,
+  StreamTurnArgs,
+} from "./types";
 import {
   buildProviderTurnPrompt,
   filterPromptRetrievedContext,
@@ -48,6 +52,7 @@ import {
 } from "../main/stave-local-mcp-manifest";
 import {
   parseBooleanEnv,
+  parsePositiveIntEnv,
   parseSemverVersion,
   probeExecutableVersion,
   summarizePathHead,
@@ -636,24 +641,77 @@ function parseClaudeQuestionList(args: { input: Record<string, unknown> }) {
   });
 }
 
-function waitForClaudeToolDecision<T>(args: {
+export class ClaudeToolDecisionTimeoutError extends Error {
+  readonly timeoutMs: number;
+  constructor(timeoutMs: number) {
+    super(`Claude tool permission request timed out after ${timeoutMs}ms.`);
+    this.name = "ClaudeToolDecisionTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+export const CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS = 30 * 60 * 1000;
+
+export function resolveClaudeApprovalDecisionTimeoutMs(args: {
+  envValue?: string;
+  override?: number;
+}) {
+  if (typeof args.override === "number" && Number.isFinite(args.override)) {
+    return Math.max(0, Math.floor(args.override));
+  }
+  return parsePositiveIntEnv({
+    value: args.envValue,
+    fallback: CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS,
+  });
+}
+
+export function waitForClaudeToolDecision<T>(args: {
   signal: AbortSignal;
   register: (resolve: (value: T) => void) => () => void;
+  /**
+   * Maximum time in milliseconds to wait for the responder to resolve the
+   * decision. When exceeded, the promise rejects with a
+   * {@link ClaudeToolDecisionTimeoutError}. Pass `0` (or omit) to disable.
+   * This is the last line of defence against responder routing bugs — it
+   * prevents the SDK promise from hanging forever when
+   * `registerApprovalResponder`/`registerUserInputResponder` fail to invoke
+   * the registered resolver (e.g. turn id mismatch, session cleaned up
+   * early).
+   */
+  timeoutMs?: number;
 }) {
   return new Promise<T>((resolve, reject) => {
     if (args.signal.aborted) {
       reject(new Error("Claude tool permission request aborted."));
       return;
     }
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const clearTimeoutHandle = () => {
+      if (timeoutHandle !== null) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+    };
     const cleanup = args.register((value) => {
+      clearTimeoutHandle();
       args.signal.removeEventListener("abort", handleAbort);
       resolve(value);
     });
     const handleAbort = () => {
+      clearTimeoutHandle();
       cleanup();
       reject(new Error("Claude tool permission request aborted."));
     };
     args.signal.addEventListener("abort", handleAbort, { once: true });
+    const timeoutMs = args.timeoutMs ?? 0;
+    if (timeoutMs > 0) {
+      timeoutHandle = setTimeout(() => {
+        timeoutHandle = null;
+        args.signal.removeEventListener("abort", handleAbort);
+        cleanup();
+        reject(new ClaudeToolDecisionTimeoutError(timeoutMs));
+      }, timeoutMs);
+    }
   });
 }
 
@@ -705,6 +763,39 @@ export function buildClaudeUserInputPermissionResult(args: {
     fallbackMessage: "User declined to answer questions.",
     context: "user-input:allow",
   });
+}
+
+export function buildClaudeApprovalTimeoutBridgeEvent(args: {
+  kind: "approval" | "user_input";
+  toolName: string;
+  requestId: string;
+  timeoutMs: number;
+}): BridgeEvent {
+  const seconds = Math.round(args.timeoutMs / 1000);
+  const label = args.kind === "user_input" ? "answer" : "approval";
+  return {
+    type: "error",
+    message: `Stave did not receive an ${label} decision for ${args.toolName} (request ${args.requestId}) within ${seconds}s. The tool was denied automatically so the turn could continue. If this happened while you were reviewing the request, the approval responder may have been lost — please report this with the devtools console logs.`,
+    recoverable: true,
+  };
+}
+
+function emitClaudeApprovalTimeoutBridgeEvent(args: {
+  eventCollector: ReturnType<typeof createBoundedBridgeEventCollector>;
+  onEvent?: (event: BridgeEvent) => void;
+  kind: "approval" | "user_input";
+  toolName: string;
+  requestId: string;
+  timeoutMs: number;
+}) {
+  const event = buildClaudeApprovalTimeoutBridgeEvent({
+    kind: args.kind,
+    toolName: args.toolName,
+    requestId: args.requestId,
+    timeoutMs: args.timeoutMs,
+  });
+  args.eventCollector.append(event);
+  args.onEvent?.(event);
 }
 
 function toClaudeThinkingConfig(
@@ -1879,14 +1970,17 @@ export async function streamClaudeWithSdk(
     onEvent?: (event: BridgeEvent) => void;
     registerAbort?: (aborter: () => void) => void;
     registerApprovalResponder?: (
-      responder: (args: { requestId: string; approved: boolean }) => boolean,
+      responder: (args: {
+        requestId: string;
+        approved: boolean;
+      }) => ProviderResponderResult,
     ) => void;
     registerUserInputResponder?: (
       responder: (args: {
         requestId: string;
         answers?: Record<string, string>;
         denied?: boolean;
-      }) => boolean,
+      }) => ProviderResponderResult,
     ) => void;
   },
 ): Promise<BridgeEvent[] | null> {
@@ -1951,20 +2045,28 @@ export async function streamClaudeWithSdk(
     args.registerApprovalResponder?.(({ requestId, approved }) => {
       const resolver = pendingApprovalResolvers.get(requestId);
       if (!resolver) {
-        return false;
+        return {
+          ok: false,
+          reason: "unknown-request",
+          pendingRequestIds: Array.from(pendingApprovalResolvers.keys()),
+        };
       }
       pendingApprovalResolvers.delete(requestId);
       resolver(approved);
-      return true;
+      return { ok: true };
     });
     args.registerUserInputResponder?.(({ requestId, answers, denied }) => {
       const resolver = pendingUserInputResolvers.get(requestId);
       if (!resolver) {
-        return false;
+        return {
+          ok: false,
+          reason: "unknown-request",
+          pendingRequestIds: Array.from(pendingUserInputResolvers.keys()),
+        };
       }
       pendingUserInputResolvers.delete(requestId);
       resolver({ answers, denied });
-      return true;
+      return { ok: true };
     });
 
     const existingSessionId = resolveSessionId({
@@ -1984,6 +2086,9 @@ export async function streamClaudeWithSdk(
       runtimeValue: args.runtimeOptions?.claudePermissionMode,
       envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
       fallback: "acceptEdits",
+    });
+    const approvalDecisionTimeoutMs = resolveClaudeApprovalDecisionTimeoutMs({
+      envValue: process.env.STAVE_CLAUDE_APPROVAL_TIMEOUT_MS,
     });
     const promptConversation = args.conversation
       ? filterPromptRetrievedContext({
@@ -2064,20 +2169,39 @@ export async function streamClaudeWithSdk(
             eventCollector.append(userInputEvent);
             args.onEvent?.(userInputEvent);
 
-            const response = await waitForClaudeToolDecision({
-              signal: options.signal,
-              register: (resolve) => {
-                pendingUserInputResolvers.set(requestId, resolve);
-                return () => {
-                  pendingUserInputResolvers.delete(requestId);
-                };
-              },
-            });
-            return buildClaudeUserInputPermissionResult({
-              normalizedInput,
-              answers: response.answers,
-              denied: response.denied,
-            });
+            try {
+              const response = await waitForClaudeToolDecision({
+                signal: options.signal,
+                register: (resolve) => {
+                  pendingUserInputResolvers.set(requestId, resolve);
+                  return () => {
+                    pendingUserInputResolvers.delete(requestId);
+                  };
+                },
+                timeoutMs: approvalDecisionTimeoutMs,
+              });
+              return buildClaudeUserInputPermissionResult({
+                normalizedInput,
+                answers: response.answers,
+                denied: response.denied,
+              });
+            } catch (error) {
+              if (error instanceof ClaudeToolDecisionTimeoutError) {
+                emitClaudeApprovalTimeoutBridgeEvent({
+                  eventCollector,
+                  onEvent: args.onEvent,
+                  kind: "user_input",
+                  toolName,
+                  requestId,
+                  timeoutMs: error.timeoutMs,
+                });
+                return buildClaudeDenyPermissionResult({
+                  message: `Stave did not receive an answer for ${toolName} within ${Math.round(error.timeoutMs / 1000)}s. Denied automatically.`,
+                  context: "user-input:timeout",
+                });
+              }
+              throw error;
+            }
           }
 
           if (
@@ -2114,20 +2238,39 @@ export async function streamClaudeWithSdk(
           eventCollector.append(approvalEvent);
           args.onEvent?.(approvalEvent);
 
-          const approved = await waitForClaudeToolDecision({
-            signal: options.signal,
-            register: (resolve) => {
-              pendingApprovalResolvers.set(requestId, resolve);
-              return () => {
-                pendingApprovalResolvers.delete(requestId);
-              };
-            },
-          });
-          return buildClaudeApprovalPermissionResult({
-            approved,
-            normalizedInput,
-            denialMessage: `User denied permission for ${toolName}.`,
-          });
+          try {
+            const approved = await waitForClaudeToolDecision({
+              signal: options.signal,
+              register: (resolve) => {
+                pendingApprovalResolvers.set(requestId, resolve);
+                return () => {
+                  pendingApprovalResolvers.delete(requestId);
+                };
+              },
+              timeoutMs: approvalDecisionTimeoutMs,
+            });
+            return buildClaudeApprovalPermissionResult({
+              approved,
+              normalizedInput,
+              denialMessage: `User denied permission for ${toolName}.`,
+            });
+          } catch (error) {
+            if (error instanceof ClaudeToolDecisionTimeoutError) {
+              emitClaudeApprovalTimeoutBridgeEvent({
+                eventCollector,
+                onEvent: args.onEvent,
+                kind: "approval",
+                toolName,
+                requestId,
+                timeoutMs: error.timeoutMs,
+              });
+              return buildClaudeDenyPermissionResult({
+                message: `Stave did not receive an approval decision for ${toolName} within ${Math.round(error.timeoutMs / 1000)}s. Denied automatically.`,
+                context: "approval:timeout",
+              });
+            }
+            throw error;
+          }
         },
       }),
     }) as Query;
