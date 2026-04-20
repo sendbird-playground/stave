@@ -1,6 +1,7 @@
 export const UI_LAYER_VALUE = {
   resizer: 20,
   chrome: 30,
+  sessionFloater: 35,
   floatingChrome: 40,
   muse: 60,
   dialog: 80,
@@ -12,6 +13,7 @@ export const UI_LAYER_VALUE = {
 export const UI_LAYER_CLASS = {
   resizer: "z-20",
   chrome: "z-30",
+  sessionFloater: "z-[35]",
   floatingChrome: "z-40",
   muse: "z-[60]",
   dialog: "z-[80]",

@@ -20,10 +20,6 @@ import {
 import type { ChatMessage, PromptDraft } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
 
-interface PlanViewerProps {
-  inputDockHeight?: number;
-}
-
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
@@ -41,7 +37,7 @@ interface DragState {
   active: boolean;
 }
 
-export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
+export function PlanViewer() {
   const [revising, setRevising] = useState(false);
   const [revisionText, setRevisionText] = useState("");
   const [viewState, setViewState] = useState<PlanViewerViewState>("normal");
@@ -287,7 +283,6 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const isExpanded = viewState === "expanded";
   const { wrapperClassName, wrapperStyle, cardClassName } = resolvePlanViewerLayout({
     viewState,
-    inputDockHeight,
     dragPos,
   });
 

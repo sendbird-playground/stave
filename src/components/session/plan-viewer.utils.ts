@@ -1,13 +1,17 @@
 import type { CSSProperties } from "react";
 import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import type { ChatMessage } from "@/types/chat";
 
 const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
 const PLAN_VIEWER_EXPANDED_TOP_PX = 12;
 const PLAN_VIEWER_SIDE_GAP_PX = 16;
 const PLAN_VIEWER_NORMAL_MAX_WIDTH_PX = 672;
+// Float plan/todo cards above chat-input chrome (`z-30` in `ChatArea`) and
+// any shell blur/fade treatment. The outer wrapper keeps `pointer-events-none`
+// so clicks fall through until an inner card explicitly opts back in.
 export const SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME =
-  "pointer-events-none absolute z-[25]";
+  `pointer-events-none absolute ${UI_LAYER_CLASS.sessionFloater}`;
 
 export type PlanViewerViewState = "normal" | "minimized" | "expanded";
 
@@ -116,22 +120,16 @@ export function buildPlanViewerContextKey(args: {
 
 export function resolvePlanViewerInsets(args: {
   isExpanded: boolean;
-  inputDockHeight: number;
 }) {
-  const bottomOffset =
-    Math.max(0, Math.round(args.inputDockHeight)) +
-    PLAN_VIEWER_COLLAPSED_GAP_PX;
-
   return {
     topOffset: args.isExpanded ? PLAN_VIEWER_EXPANDED_TOP_PX : null,
     rightOffset: PLAN_VIEWER_SIDE_GAP_PX,
-    bottomOffset,
+    bottomOffset: PLAN_VIEWER_COLLAPSED_GAP_PX,
   };
 }
 
 export function resolvePlanViewerLayout(args: {
   viewState: PlanViewerViewState;
-  inputDockHeight: number;
   dragPos?: PlanViewerDragPosition | null;
 }): {
   wrapperClassName: string;
@@ -142,13 +140,12 @@ export function resolvePlanViewerLayout(args: {
   const isMinimized = args.viewState === "minimized";
   const { topOffset, rightOffset, bottomOffset } = resolvePlanViewerInsets({
     isExpanded,
-    inputDockHeight: args.inputDockHeight,
   });
 
   if (isMinimized && args.dragPos) {
     return {
-      // Keep plan review above transient todo progress while staying below the
-      // chat input dock (`z-30` in ChatArea).
+      // Plan review floats above transient todo progress and chat-input chrome;
+      // see SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME.
       wrapperClassName: SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME,
       wrapperStyle: {
         top: args.dragPos.y,
