@@ -10510,16 +10510,22 @@ export const useAppStore = create<AppState>()(
 
           const parentPromptDraft =
             parentWorkspaceSession.promptDraftByTask[parentTaskId];
-          const resolvedFileContexts = await getDraftFileContexts({
-            promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
-            session: parentWorkspaceSession,
-            workspaceRootPath: parentWorkspaceCwd,
-            fileContexts,
-          });
-          const resolvedImageContexts = getDraftImageContexts({
-            promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
-            imageContexts,
-          });
+          const resolvedFileContexts =
+            fileContexts !== undefined
+              ? fileContexts
+              : await getDraftFileContexts({
+                  promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
+                  session: parentWorkspaceSession,
+                  workspaceRootPath: parentWorkspaceCwd,
+                  fileContexts,
+                });
+          const resolvedImageContexts =
+            imageContexts !== undefined
+              ? imageContexts
+              : getDraftImageContexts({
+                  promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
+                  imageContexts,
+                });
 
           // Re-read state in case file reads yielded the event loop.
           state = get();

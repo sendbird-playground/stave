@@ -1192,6 +1192,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
         parentTaskId={activeTaskId}
         defaultProviderId={activeProvider}
         defaultModel={activeModel}
+        workspaceRootPath={workspaceCwd}
         disabled={Boolean(disabledReason)}
         disabledReason={disabledReason}
         tooltipSide="top"
@@ -1222,6 +1223,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     args.compact,
     isTurnActive,
     restoreColiseum,
+    workspaceCwd,
   ]);
   const selectedModelOption = useMemo<ModelSelectorOption>(
     () =>
