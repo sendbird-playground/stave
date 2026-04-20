@@ -35,6 +35,17 @@ The repository-local copy of this skill lives at `skills/stave-worktree-pr-flow/
 
 Do not use `$stave-worktree-pr-flow` for plain `commit` or `push` requests that do not mention a PR.
 
+## Workspace Handoff Convention
+
+When you create a new Stave workspace to hand off follow-up work (for example via `stave_create_workspace`), use plan files — not workspace Notes — as the primary carrier:
+
+- Write a plan file to the target workspace at `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`. Use the `Write` tool directly against the new worktree root returned by `stave_create_workspace`. If no task id exists yet, use a placeholder prefix such as `handoff` and rename once a task id is assigned.
+- In the target workspace Notes, append ONLY a short pointer like `See plan: .stave/context/plans/<filename>.md`. Do not duplicate the plan body into Notes.
+- Todos in the target should be terse action items that point back at the plan file, not a re-statement of the plan.
+- The plan file must describe ONLY the handoff sub-task and the context needed to execute it. Do NOT copy the source workspace's plan, notes, or todos verbatim — the source workspace's plan stays in the source. Cite the source by `workspaceId` / `taskId` when that helps the receiving agent.
+
+Stave already injects these rules into each task's prompt context (`Handoff procedure:` section in the `Current Stave Task Context` retrieved context, and `handoffConvention:` line in the `[Stave Workspace Context]` prefix). Do not regress that block when editing `src/lib/task-context/current-task-awareness.ts` or `src/lib/providers/canonical-request.ts`.
+
 ## Release Workflow
 
 Use `$stave-release` only for explicit Stave release requests. This includes requests to ship or publish a release, bump the app version, generate release notes or changelog entries for a release, or prepare a versioned release PR against `main`.

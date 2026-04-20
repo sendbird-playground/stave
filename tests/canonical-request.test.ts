@@ -103,6 +103,7 @@ describe("canonical request builder", () => {
     expect(prompt).toContain("taskId: task-1");
     expect(prompt).toContain("workspacePlanDirectory: .stave/context/plans");
     expect(prompt).toContain("newWorkspacePlanFiles: .stave/context/plans/<taskIdPrefix>_<timestamp>.md");
+    expect(prompt).toContain("handoffConvention: write plan files (not workspace notes) when handing off to a new workspace");
     expect(prompt).toContain("[Task Shared Context]");
     expect(prompt).toContain("assistant: 1. Check git status");
     expect(prompt).toContain("[Current User Input]");

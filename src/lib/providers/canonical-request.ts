@@ -289,6 +289,7 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
             args.request.taskId ? `taskId: ${args.request.taskId}` : null,
             "workspacePlanDirectory: .stave/context/plans",
             "newWorkspacePlanFiles: .stave/context/plans/<taskIdPrefix>_<timestamp>.md",
+            "handoffConvention: write plan files (not workspace notes) when handing off to a new workspace; notes carry only a pointer to the plan file, and the source workspace's plan/notes/todos must not be copied verbatim into the target.",
           ].filter(Boolean).join("\n"),
         ]
       : []),

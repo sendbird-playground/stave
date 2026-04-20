@@ -9,6 +9,7 @@ See [AGENTS.md](./AGENTS.md) for the authoritative project policy.
 - Run `bun test` after code changes to verify nothing is broken.
 - Prefer the `Agent` tool with `subagent_type: "Explore"` for open-ended codebase searches rather than manual glob/grep chains.
 - **Theme system**: Any UI work — layout, components, colours, surfaces, shadcn presets — must verify and update `src/lib/themes/` (types, presets, built-in themes) and `src/globals.css`. This applies to the base light/dark system **and** custom themes equally. See the "Theme System" section in `AGENTS.md` for the full checklist.
+- **Workspace handoff**: When handing off follow-up work to a newly-created Stave workspace, write a plan file at the target's `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`; leave only a `See plan: …` pointer in Notes, and never copy the source workspace's plan/notes/todos verbatim. The full procedure lives in the `Handoff procedure:` block of every task prompt and in the "Workspace Handoff Convention" section of `AGENTS.md`.
 
 ## Safety Skills → Stave File Mapping
 
