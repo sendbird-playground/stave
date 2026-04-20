@@ -225,9 +225,14 @@ import {
   runProviderTurn,
 } from "@/store/provider-turn-runtime";
 import {
+  buildReviewerPrompt,
+  clearReviewerFromGroup,
+  extractBranchSummary,
   planColiseumFanOut,
+  planReviewerLaunch,
   promoteColiseumChampion,
   stripColiseumBranchesFromRecords,
+  unpickColiseumChampion as unpickColiseumChampionUtil,
   validateColiseumBranches,
   type ColiseumBranchSpec,
 } from "@/store/coliseum.utils";
@@ -242,6 +247,7 @@ import type {
   ClaudePermissionMode,
   ClaudePermissionModeBeforePlan,
   ColiseumGroupState,
+  ColiseumReviewerVerdict,
   EditorTab,
   PromptDraft,
   Task,
@@ -487,6 +493,125 @@ function arePromptDraftQueuedNextTurnEqual(
     left?.sourceTurnId === right?.sourceTurnId &&
     left?.content === right?.content
   );
+}
+
+/**
+ * Mirror the reviewer task's assistant message text into the group's
+ * `reviewerVerdict.content` so the arena's ColiseumReviewerCard can subscribe
+ * directly to `group.reviewerVerdict` — the reviewer task is hidden from the
+ * task tree by `coliseumParentTaskId` and never rendered as a chat column, so
+ * its messages record must be translated back onto the parent-scoped group
+ * state. Also drives the `running` → `complete` / `error` transition.
+ *
+ * Called from the reviewer's flushEvents callback AFTER
+ * `applyPendingProviderEventsToStoreState` so we read the already-applied
+ * assistant text from `state.messagesByTask[reviewerTaskId]`.
+ *
+ * Keeping this in its own helper keeps the launch action readable and means
+ * tests can exercise mirroring logic without the full dispatch path later.
+ */
+function mirrorReviewerVerdict(args: {
+  set: (updater: (state: AppState) => Partial<AppState>) => void;
+  get: () => AppState;
+  parentTaskId: string;
+  reviewerTaskId: string;
+  workspaceId: string;
+  pendingEvents: NormalizedProviderEvent[];
+}) {
+  const state = args.get();
+  const sessionMessages =
+    state.activeWorkspaceId === args.workspaceId
+      ? state.messagesByTask
+      : state.workspaceRuntimeCacheById[args.workspaceId]?.messagesByTask;
+  if (!sessionMessages) return;
+  const messages = sessionMessages[args.reviewerTaskId] ?? [];
+  const assistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const accumulatedText =
+    assistant?.parts
+      .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+      .map((p) => p.text)
+      .join("") ?? "";
+
+  const group =
+    state.activeWorkspaceId === args.workspaceId
+      ? state.activeColiseumsByTask[args.parentTaskId]
+      : state.workspaceRuntimeCacheById[args.workspaceId]?.activeColiseumsByTask[
+          args.parentTaskId
+        ];
+  if (!group || !group.reviewerVerdict) return;
+
+  // Detect lifecycle transitions by inspecting the events we just applied.
+  const sawError = args.pendingEvents.some(
+    (event) => event.type === "error",
+  );
+  const sawDone = args.pendingEvents.some((event) => event.type === "done");
+
+  const nextStatus: ColiseumReviewerVerdict["status"] = sawError
+    ? "error"
+    : sawDone
+      ? "complete"
+      : group.reviewerVerdict.status;
+  const nextCompletedAt =
+    (sawDone || sawError) && !group.reviewerVerdict.completedAt
+      ? buildRecentTimestamp()
+      : group.reviewerVerdict.completedAt;
+
+  const errorEvent = args.pendingEvents.find(
+    (event): event is Extract<NormalizedProviderEvent, { type: "error" }> =>
+      event.type === "error",
+  );
+  const errorMessage = sawError
+    ? (errorEvent?.message ??
+      group.reviewerVerdict.errorMessage ??
+      "Reviewer failed.")
+    : group.reviewerVerdict.errorMessage;
+
+  const nextVerdict: ColiseumReviewerVerdict = {
+    ...group.reviewerVerdict,
+    content: accumulatedText,
+    status: nextStatus,
+    ...(nextCompletedAt ? { completedAt: nextCompletedAt } : {}),
+    ...(errorMessage ? { errorMessage } : {}),
+  };
+
+  // Skip the set if nothing actually changed to keep subscribers quiet.
+  if (
+    nextVerdict.content === group.reviewerVerdict.content &&
+    nextVerdict.status === group.reviewerVerdict.status &&
+    nextVerdict.completedAt === group.reviewerVerdict.completedAt &&
+    nextVerdict.errorMessage === group.reviewerVerdict.errorMessage
+  ) {
+    return;
+  }
+
+  const nextGroup: ColiseumGroupState = {
+    ...group,
+    reviewerVerdict: nextVerdict,
+  };
+  args.set((current) => {
+    if (args.workspaceId === current.activeWorkspaceId) {
+      return {
+        activeColiseumsByTask: {
+          ...current.activeColiseumsByTask,
+          [args.parentTaskId]: nextGroup,
+        },
+      } as Partial<AppState>;
+    }
+    const cached = current.workspaceRuntimeCacheById[args.workspaceId];
+    if (!cached) return current;
+    return {
+      workspaceRuntimeCacheById: {
+        ...current.workspaceRuntimeCacheById,
+        [args.workspaceId]: {
+          ...cached,
+          activeColiseumsByTask: {
+            ...cached.activeColiseumsByTask,
+            [args.parentTaskId]: nextGroup,
+          },
+        },
+      },
+    } as Partial<AppState>;
+  });
 }
 
 function resolveTaskRuntimeTarget(args: {
@@ -1219,8 +1344,54 @@ interface AppState {
     parentTaskId: string;
     championTaskId: string;
   }) => void;
+  unpickColiseumChampion: (args: { parentTaskId: string }) => void;
+  setColiseumViewMode: (args: {
+    parentTaskId: string;
+    viewMode: ColiseumGroupState["viewMode"];
+    focusedBranchTaskId?: string | null;
+  }) => void;
+  minimizeColiseum: (args: { parentTaskId: string }) => void;
+  restoreColiseum: (args: { parentTaskId: string }) => void;
   closeColiseumBranch: (args: { branchTaskId: string }) => void;
+  /**
+   * Non-destructive by default is now the norm — this is the explicit
+   * destructive action that aborts remaining turns and drops every branch.
+   * `dismissColiseum` is preserved as an alias for callers that haven't
+   * migrated yet.
+   */
+  discardColiseumRun: (args: { parentTaskId: string }) => void;
   dismissColiseum: (args: { parentTaskId: string }) => void;
+  /**
+   * Phase 2.3 "partial pick" — staged as a follow-up prompt on the parent so
+   * the user keeps authorship. After the champion's answer is committed to the
+   * parent, picking another branch via this action pre-fills the parent's
+   * prompt draft with a follow-up ("please also incorporate …") quoting the
+   * alternative branch's final text. No new provider turn runs automatically;
+   * the user reviews and sends from the composer like any other message.
+   */
+  enqueueColiseumIncorporateFollowUp: (args: {
+    parentTaskId: string;
+    branchTaskId: string;
+  }) => void;
+  /**
+   * Spawn an ephemeral reviewer task that compares branch outputs and streams
+   * a verdict into `group.reviewerVerdict`. Only one reviewer runs at a time
+   * per group — relaunching aborts any in-flight reviewer first. Result status
+   * `"blocked"` means the caller should surface the reason as a toast.
+   */
+  launchColiseumReviewer: (args: {
+    parentTaskId: string;
+    reviewerProvider: ProviderId;
+    reviewerModel: string;
+  }) => Promise<
+    | { status: "blocked"; reason: string }
+    | { status: "started"; reviewerTaskId: string; turnId: string }
+  >;
+  /**
+   * Drop the reviewer verdict and kill the reviewer task. Called by the
+   * verdict card's "Clear" button and implicitly by `discardColiseumRun`.
+   */
+  clearColiseumReviewerVerdict: (args: { parentTaskId: string }) => void;
   abortTaskTurn: (args: { taskId: string }) => void;
   resolveApproval: (args: {
     taskId: string;
@@ -10700,54 +10871,41 @@ export const useAppStore = create<AppState>()(
               championTaskId,
               parentMessages,
               championMessages,
+              // Re-pick: if a champion was already grafted, roll the parent
+              // back to pre-fan-out first so the new champion's tail replaces
+              // (not appends to) the previous pick.
+              replacePreviousPick: group.championTaskId != null,
             });
           } catch {
             return;
           }
 
-          // Side effects: abort any still-streaming branch turns and evict
-          // provider runtime caches for every branch (including champion —
-          // the parent task owns the grafted conversation now, so the branch
-          // taskId's runtime state is disposable).
-          const abortTurn = window.api?.provider?.abortTurn;
-          const cleanupTask = window.api?.provider?.cleanupTask;
-          for (const branchTaskId of group.branchTaskIds) {
-            const activeTurnId =
-              parentSession.activeTurnIdsByTask[branchTaskId];
-            if (activeTurnId && abortTurn) {
-              void abortTurn({ turnId: activeTurnId });
-            }
-            clearProviderTurnStallTimer(branchTaskId);
-            if (cleanupTask) {
-              void cleanupTask({ taskId: branchTaskId });
-            }
-          }
-
-          // Champion's provider session + native session flag transfers to the
-          // parent. This preserves thread continuity so follow-up turns can
-          // resume the same provider thread that produced the champion's
-          // response.
+          // Non-destructive: branches stay alive so the user can re-pick or
+          // keep comparing. Runtime caches are NOT evicted here — discard is
+          // now the explicit destructive action.
           const championProviderSession =
             parentSession.providerSessionByTask[championTaskId] ?? {};
           const championNativeSessionReady =
             parentSession.nativeSessionReadyByTask[championTaskId] ?? false;
-          const branchTaskIdsToDrop = promotion.branchTaskIdsToDrop;
+
+          const pickedAt = buildRecentTimestamp();
+          const nextGroup: ColiseumGroupState = {
+            ...group,
+            status: "promoted",
+            championTaskId,
+            pickedHistory: [
+              ...group.pickedHistory,
+              { championTaskId, pickedAt },
+            ],
+          };
 
           set((nextState) => {
-            const nextActiveColiseumsByTask = {
-              ...nextState.activeColiseumsByTask,
-            };
-            delete nextActiveColiseumsByTask[parentTaskId];
-
             const applyPatchToSession = <
               S extends {
-                tasks: Task[];
                 messagesByTask: Record<string, ChatMessage[]>;
                 messageCountByTask: Record<string, number>;
-                activeTurnIdsByTask: Record<string, string | undefined>;
                 providerSessionByTask: Record<string, TaskProviderSessionState>;
                 nativeSessionReadyByTask: Record<string, boolean>;
-                promptDraftByTask: Record<string, PromptDraft>;
                 activeColiseumsByTask: Record<
                   string,
                   ColiseumGroupState | undefined
@@ -10755,110 +10913,52 @@ export const useAppStore = create<AppState>()(
               },
             >(
               session: S,
-            ): S => {
-              const branchDropSet = new Set(branchTaskIdsToDrop);
-              return {
-                ...session,
-                tasks: session.tasks.filter(
-                  (task) => !branchDropSet.has(task.id),
-                ),
-                messagesByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    session.messagesByTask,
-                    branchTaskIdsToDrop,
-                  ),
-                  [parentTaskId]: promotion.nextParentMessages,
-                },
-                messageCountByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    session.messageCountByTask,
-                    branchTaskIdsToDrop,
-                  ),
-                  [parentTaskId]: promotion.nextParentMessages.length,
-                },
-                activeTurnIdsByTask: stripColiseumBranchesFromRecords(
-                  session.activeTurnIdsByTask,
-                  branchTaskIdsToDrop,
-                ),
-                providerSessionByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    session.providerSessionByTask,
-                    branchTaskIdsToDrop,
-                  ),
-                  [parentTaskId]: championProviderSession,
-                },
-                nativeSessionReadyByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    session.nativeSessionReadyByTask,
-                    branchTaskIdsToDrop,
-                  ),
-                  [parentTaskId]: championNativeSessionReady,
-                },
-                promptDraftByTask: stripColiseumBranchesFromRecords(
-                  session.promptDraftByTask,
-                  branchTaskIdsToDrop,
-                ),
-                activeColiseumsByTask: stripColiseumBranchesFromRecords(
-                  session.activeColiseumsByTask,
-                  branchTaskIdsToDrop,
-                ),
-              };
-            };
-
-            const branchDropSet = new Set(branchTaskIdsToDrop);
-            const nextTaskWorkspaceIdById = stripColiseumBranchesFromRecords(
-              nextState.taskWorkspaceIdById,
-              branchTaskIdsToDrop,
-            );
+            ): S => ({
+              ...session,
+              messagesByTask: {
+                ...session.messagesByTask,
+                [parentTaskId]: promotion.nextParentMessages,
+              },
+              messageCountByTask: {
+                ...session.messageCountByTask,
+                [parentTaskId]: promotion.nextParentMessages.length,
+              },
+              providerSessionByTask: {
+                ...session.providerSessionByTask,
+                [parentTaskId]: championProviderSession,
+              },
+              nativeSessionReadyByTask: {
+                ...session.nativeSessionReadyByTask,
+                [parentTaskId]: championNativeSessionReady,
+              },
+              activeColiseumsByTask: {
+                ...session.activeColiseumsByTask,
+                [parentTaskId]: nextGroup,
+              },
+            });
 
             if (workspaceId === nextState.activeWorkspaceId) {
               return {
-                tasks: nextState.tasks.filter(
-                  (task) => !branchDropSet.has(task.id),
-                ),
                 messagesByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    nextState.messagesByTask,
-                    branchTaskIdsToDrop,
-                  ),
+                  ...nextState.messagesByTask,
                   [parentTaskId]: promotion.nextParentMessages,
                 },
                 messageCountByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    nextState.messageCountByTask,
-                    branchTaskIdsToDrop,
-                  ),
+                  ...nextState.messageCountByTask,
                   [parentTaskId]: promotion.nextParentMessages.length,
                 },
-                activeTurnIdsByTask: stripColiseumBranchesFromRecords(
-                  nextState.activeTurnIdsByTask,
-                  branchTaskIdsToDrop,
-                ),
                 providerSessionByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    nextState.providerSessionByTask,
-                    branchTaskIdsToDrop,
-                  ),
+                  ...nextState.providerSessionByTask,
                   [parentTaskId]: championProviderSession,
                 },
                 nativeSessionReadyByTask: {
-                  ...stripColiseumBranchesFromRecords(
-                    nextState.nativeSessionReadyByTask,
-                    branchTaskIdsToDrop,
-                  ),
+                  ...nextState.nativeSessionReadyByTask,
                   [parentTaskId]: championNativeSessionReady,
                 },
-                promptDraftByTask: stripColiseumBranchesFromRecords(
-                  nextState.promptDraftByTask,
-                  branchTaskIdsToDrop,
-                ),
-                activeColiseumsByTask: nextActiveColiseumsByTask,
-                taskWorkspaceIdById: nextTaskWorkspaceIdById,
-                activeTaskId:
-                  nextState.activeTaskId &&
-                  branchDropSet.has(nextState.activeTaskId)
-                    ? parentTaskId
-                    : nextState.activeTaskId,
+                activeColiseumsByTask: {
+                  ...nextState.activeColiseumsByTask,
+                  [parentTaskId]: nextGroup,
+                },
                 workspaceSnapshotVersion:
                   incrementWorkspaceSnapshotVersion(nextState),
               };
@@ -10869,13 +10969,223 @@ export const useAppStore = create<AppState>()(
               return nextState;
             }
             return {
-              taskWorkspaceIdById: nextTaskWorkspaceIdById,
               workspaceRuntimeCacheById: {
                 ...nextState.workspaceRuntimeCacheById,
                 [workspaceId]: applyPatchToSession(cachedSession),
               },
             };
           });
+        },
+        unpickColiseumChampion: ({ parentTaskId }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group || !group.championTaskId) {
+            return;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const workspaceId = parentRuntimeTarget.workspaceId;
+          const parentSession = parentRuntimeTarget.session;
+          const parentMessages =
+            parentSession.messagesByTask[parentTaskId] ?? [];
+          const { nextParentMessages } = unpickColiseumChampionUtil({
+            group,
+            parentMessages,
+          });
+          const nextGroup: ColiseumGroupState = {
+            ...group,
+            status: "ready",
+            championTaskId: null,
+          };
+
+          set((nextState) => {
+            if (workspaceId === nextState.activeWorkspaceId) {
+              return {
+                messagesByTask: {
+                  ...nextState.messagesByTask,
+                  [parentTaskId]: nextParentMessages,
+                },
+                messageCountByTask: {
+                  ...nextState.messageCountByTask,
+                  [parentTaskId]: nextParentMessages.length,
+                },
+                activeColiseumsByTask: {
+                  ...nextState.activeColiseumsByTask,
+                  [parentTaskId]: nextGroup,
+                },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(nextState),
+              };
+            }
+            const cachedSession =
+              nextState.workspaceRuntimeCacheById[workspaceId];
+            if (!cachedSession) {
+              return nextState;
+            }
+            return {
+              workspaceRuntimeCacheById: {
+                ...nextState.workspaceRuntimeCacheById,
+                [workspaceId]: {
+                  ...cachedSession,
+                  messagesByTask: {
+                    ...cachedSession.messagesByTask,
+                    [parentTaskId]: nextParentMessages,
+                  },
+                  messageCountByTask: {
+                    ...cachedSession.messageCountByTask,
+                    [parentTaskId]: nextParentMessages.length,
+                  },
+                  activeColiseumsByTask: {
+                    ...cachedSession.activeColiseumsByTask,
+                    [parentTaskId]: nextGroup,
+                  },
+                },
+              },
+            };
+          });
+        },
+        setColiseumViewMode: ({
+          parentTaskId,
+          viewMode,
+          focusedBranchTaskId,
+        }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group) {
+            return;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const workspaceId = parentRuntimeTarget.workspaceId;
+          // When switching to focus without an explicit branch, default to the
+          // champion if one is picked, else the first branch.
+          const resolvedFocus =
+            viewMode === "focus"
+              ? (focusedBranchTaskId ??
+                group.focusedBranchTaskId ??
+                group.championTaskId ??
+                group.branchTaskIds[0] ??
+                null)
+              : null;
+          const nextGroup: ColiseumGroupState = {
+            ...group,
+            viewMode,
+            focusedBranchTaskId: resolvedFocus,
+          };
+          set((nextState) =>
+            workspaceId === nextState.activeWorkspaceId
+              ? {
+                  activeColiseumsByTask: {
+                    ...nextState.activeColiseumsByTask,
+                    [parentTaskId]: nextGroup,
+                  },
+                }
+              : nextState.workspaceRuntimeCacheById[workspaceId]
+                ? {
+                    workspaceRuntimeCacheById: {
+                      ...nextState.workspaceRuntimeCacheById,
+                      [workspaceId]: {
+                        ...nextState.workspaceRuntimeCacheById[workspaceId]!,
+                        activeColiseumsByTask: {
+                          ...nextState.workspaceRuntimeCacheById[workspaceId]!
+                            .activeColiseumsByTask,
+                          [parentTaskId]: nextGroup,
+                        },
+                      },
+                    },
+                  }
+                : nextState,
+          );
+        },
+        minimizeColiseum: ({ parentTaskId }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group || group.minimized) {
+            return;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const workspaceId = parentRuntimeTarget.workspaceId;
+          const nextGroup: ColiseumGroupState = { ...group, minimized: true };
+          set((nextState) =>
+            workspaceId === nextState.activeWorkspaceId
+              ? {
+                  activeColiseumsByTask: {
+                    ...nextState.activeColiseumsByTask,
+                    [parentTaskId]: nextGroup,
+                  },
+                }
+              : nextState.workspaceRuntimeCacheById[workspaceId]
+                ? {
+                    workspaceRuntimeCacheById: {
+                      ...nextState.workspaceRuntimeCacheById,
+                      [workspaceId]: {
+                        ...nextState.workspaceRuntimeCacheById[workspaceId]!,
+                        activeColiseumsByTask: {
+                          ...nextState.workspaceRuntimeCacheById[workspaceId]!
+                            .activeColiseumsByTask,
+                          [parentTaskId]: nextGroup,
+                        },
+                      },
+                    },
+                  }
+                : nextState,
+          );
+        },
+        restoreColiseum: ({ parentTaskId }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group || !group.minimized) {
+            return;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const workspaceId = parentRuntimeTarget.workspaceId;
+          const nextGroup: ColiseumGroupState = { ...group, minimized: false };
+          set((nextState) =>
+            workspaceId === nextState.activeWorkspaceId
+              ? {
+                  activeColiseumsByTask: {
+                    ...nextState.activeColiseumsByTask,
+                    [parentTaskId]: nextGroup,
+                  },
+                }
+              : nextState.workspaceRuntimeCacheById[workspaceId]
+                ? {
+                    workspaceRuntimeCacheById: {
+                      ...nextState.workspaceRuntimeCacheById,
+                      [workspaceId]: {
+                        ...nextState.workspaceRuntimeCacheById[workspaceId]!,
+                        activeColiseumsByTask: {
+                          ...nextState.workspaceRuntimeCacheById[workspaceId]!
+                            .activeColiseumsByTask,
+                          [parentTaskId]: nextGroup,
+                        },
+                      },
+                    },
+                  }
+                : nextState,
+          );
         },
         closeColiseumBranch: ({ branchTaskId }) => {
           const state = get();
@@ -11044,24 +11354,34 @@ export const useAppStore = create<AppState>()(
             };
           });
         },
-        dismissColiseum: ({ parentTaskId }) => {
+        discardColiseumRun: ({ parentTaskId }) => {
           const state = get();
           const group = state.activeColiseumsByTask[parentTaskId];
           if (!group) {
             return;
           }
-          // Dismiss = drop the whole contest without promoting any branch. The
-          // parent's history is untouched; every branch is discarded.
+          // Discard = drop the whole contest without promoting any branch.
+          // If a champion was previously picked, its graft stays on the parent —
+          // only the branches and arena state are removed. To fully roll the
+          // parent back to pre-fan-out, the caller should invoke
+          // `unpickColiseumChampion` first.
+          //
+          // The reviewer task (if any) lives under the same parent and is
+          // torn down alongside branches so no orphaned runtime remains.
           const abortTurn = window.api?.provider?.abortTurn;
           const cleanupTask = window.api?.provider?.cleanupTask;
-          for (const branchTaskId of group.branchTaskIds) {
-            const activeTurnId = state.activeTurnIdsByTask[branchTaskId];
+          const ephemeralTaskIds = [
+            ...group.branchTaskIds,
+            ...(group.reviewerTaskId ? [group.reviewerTaskId] : []),
+          ];
+          for (const ephemeralTaskId of ephemeralTaskIds) {
+            const activeTurnId = state.activeTurnIdsByTask[ephemeralTaskId];
             if (activeTurnId && abortTurn) {
               void abortTurn({ turnId: activeTurnId });
             }
-            clearProviderTurnStallTimer(branchTaskId);
+            clearProviderTurnStallTimer(ephemeralTaskId);
             if (cleanupTask) {
-              void cleanupTask({ taskId: branchTaskId });
+              void cleanupTask({ taskId: ephemeralTaskId });
             }
           }
           const parentRuntimeTarget = resolveTaskRuntimeTarget({
@@ -11072,7 +11392,7 @@ export const useAppStore = create<AppState>()(
             return;
           }
           const workspaceId = parentRuntimeTarget.workspaceId;
-          const branchesToDrop = group.branchTaskIds;
+          const branchesToDrop = ephemeralTaskIds;
 
           set((nextState) => {
             const branchDropSet = new Set(branchesToDrop);
@@ -11170,6 +11490,545 @@ export const useAppStore = create<AppState>()(
                     branchesToDrop,
                   ),
                   activeColiseumsByTask: nextCachedColiseums,
+                },
+              },
+            };
+          });
+        },
+        // Legacy alias. New callers should use `discardColiseumRun` directly so
+        // the destructive intent is obvious.
+        dismissColiseum: ({ parentTaskId }) => {
+          get().discardColiseumRun({ parentTaskId });
+        },
+        enqueueColiseumIncorporateFollowUp: ({
+          parentTaskId,
+          branchTaskId,
+        }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group || !group.branchTaskIds.includes(branchTaskId)) {
+            return;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const parentSession = parentRuntimeTarget.session;
+          const meta = group.branchMeta[branchTaskId];
+          if (!meta) return;
+
+          const branchMessages =
+            parentSession.messagesByTask[branchTaskId] ?? [];
+          const branchAssistantText = (() => {
+            // Final assistant text from the branch — same accumulator the
+            // reviewer summary uses but scoped to this single branch.
+            const tail = branchMessages.slice(
+              group.parentMessageCountAtFanout,
+            );
+            const assistants = tail.filter((m) => m.role === "assistant");
+            return assistants
+              .flatMap((msg) =>
+                msg.parts
+                  .filter(
+                    (
+                      p,
+                    ): p is Extract<
+                      (typeof msg.parts)[number],
+                      { type: "text" }
+                    > => p.type === "text",
+                  )
+                  .map((p) => p.text),
+              )
+              .join("\n")
+              .trim();
+          })();
+
+          const quotedText =
+            branchAssistantText.length > 0
+              ? branchAssistantText
+                  .split("\n")
+                  .map((line) => `> ${line}`)
+                  .join("\n")
+              : "> _(no final text — branch used only tools)_";
+
+          const providerLabel = meta.provider;
+          const modelLabel = meta.model;
+          const followUpText = `Please also incorporate ideas from the ${providerLabel}/${modelLabel} branch's answer (below). Reconcile with the current champion where they overlap, and call out explicit trade-offs if something has to give.\n\n${quotedText}\n\n— (auto-generated from Coliseum "Also incorporate from…")`;
+
+          const currentDraft =
+            parentSession.promptDraftByTask[parentTaskId] ?? EMPTY_PROMPT_DRAFT;
+          const separator = currentDraft.text.trim().length > 0 ? "\n\n" : "";
+          const nextText = `${currentDraft.text}${separator}${followUpText}`;
+
+          get().updatePromptDraft({
+            taskId: parentTaskId,
+            patch: { text: nextText },
+          });
+        },
+        launchColiseumReviewer: async ({
+          parentTaskId,
+          reviewerProvider,
+          reviewerModel,
+        }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group) {
+            return {
+              status: "blocked",
+              reason: "Coliseum not found for this task.",
+            } as const;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return {
+              status: "blocked",
+              reason: "Parent task not found.",
+            } as const;
+          }
+          const parentSession = parentRuntimeTarget.session;
+          const workspaceId = parentRuntimeTarget.workspaceId;
+          const parentTask = parentRuntimeTarget.task;
+
+          // Abort any prior reviewer cleanly before starting a new one — the
+          // verdict card's "Re-run" button lands here.
+          if (group.reviewerTaskId) {
+            const priorTurnId =
+              state.activeTurnIdsByTask[group.reviewerTaskId];
+            const abortTurn = window.api?.provider?.abortTurn;
+            if (priorTurnId && abortTurn) {
+              void abortTurn({ turnId: priorTurnId });
+            }
+            const cleanupTask = window.api?.provider?.cleanupTask;
+            if (cleanupTask) {
+              void cleanupTask({ taskId: group.reviewerTaskId });
+            }
+            clearProviderTurnStallTimer(group.reviewerTaskId);
+          }
+
+          // Pull the original user prompt — the first user message added at
+          // fan-out time. Using messagesByTask on a branch: message index
+          // `parentMessageCountAtFanout` is the user's Coliseum prompt.
+          const firstBranchId = group.branchTaskIds[0];
+          const firstBranchMessages = firstBranchId
+            ? (parentSession.messagesByTask[firstBranchId] ?? [])
+            : [];
+          const originalUserPrompt =
+            firstBranchMessages[group.parentMessageCountAtFanout]?.content ??
+            "";
+
+          // Reduce each branch to the summary shape the reviewer needs.
+          const branchSummaries = group.branchTaskIds
+            .map((branchId) => {
+              const meta = group.branchMeta[branchId];
+              if (!meta) return null;
+              const branchMessages =
+                parentSession.messagesByTask[branchId] ?? [];
+              return extractBranchSummary({
+                branchMeta: meta,
+                branchMessages,
+                parentMessageCountAtFanout: group.parentMessageCountAtFanout,
+              });
+            })
+            .filter((s): s is NonNullable<typeof s> => s !== null);
+          if (branchSummaries.length === 0) {
+            return {
+              status: "blocked",
+              reason: "No branch output available to review yet.",
+            } as const;
+          }
+
+          const reviewerPrompt = buildReviewerPrompt({
+            originalUserPrompt,
+            branchSummaries,
+          });
+
+          const parentPromptDraft =
+            parentSession.promptDraftByTask[parentTaskId];
+
+          const plan = planReviewerLaunch({
+            parentTask,
+            group,
+            parentTaskWorkspaceId: workspaceId,
+            reviewerProvider,
+            reviewerModel,
+            reviewerPrompt,
+            parentPromptDraft,
+          });
+
+          // Apply reviewer task + seeded messages + group state to the store.
+          set((nextState) => {
+            const mergedTaskWorkspaceIdById = {
+              ...nextState.taskWorkspaceIdById,
+              [plan.reviewerTask.id]: workspaceId,
+            };
+            if (workspaceId === nextState.activeWorkspaceId) {
+              return {
+                tasks: [...nextState.tasks, plan.reviewerTask],
+                messagesByTask: {
+                  ...nextState.messagesByTask,
+                  [plan.reviewerTask.id]: plan.reviewerMessages,
+                },
+                messageCountByTask: {
+                  ...nextState.messageCountByTask,
+                  [plan.reviewerTask.id]: plan.reviewerMessages.length,
+                },
+                activeTurnIdsByTask: {
+                  ...nextState.activeTurnIdsByTask,
+                  [plan.reviewerTask.id]: plan.reviewerTurnId,
+                },
+                providerSessionByTask: {
+                  ...nextState.providerSessionByTask,
+                  [plan.reviewerTask.id]: plan.reviewerProviderSession,
+                },
+                nativeSessionReadyByTask: {
+                  ...nextState.nativeSessionReadyByTask,
+                  [plan.reviewerTask.id]: false,
+                },
+                promptDraftByTask: {
+                  ...nextState.promptDraftByTask,
+                  [plan.reviewerTask.id]: plan.reviewerPromptDraft,
+                },
+                activeColiseumsByTask: {
+                  ...nextState.activeColiseumsByTask,
+                  [parentTaskId]: plan.nextGroup,
+                },
+                taskWorkspaceIdById: mergedTaskWorkspaceIdById,
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(nextState),
+              };
+            }
+            const cachedSession =
+              nextState.workspaceRuntimeCacheById[workspaceId];
+            if (!cachedSession) {
+              return nextState;
+            }
+            return {
+              taskWorkspaceIdById: mergedTaskWorkspaceIdById,
+              workspaceRuntimeCacheById: {
+                ...nextState.workspaceRuntimeCacheById,
+                [workspaceId]: {
+                  ...cachedSession,
+                  tasks: [...cachedSession.tasks, plan.reviewerTask],
+                  messagesByTask: {
+                    ...cachedSession.messagesByTask,
+                    [plan.reviewerTask.id]: plan.reviewerMessages,
+                  },
+                  messageCountByTask: {
+                    ...cachedSession.messageCountByTask,
+                    [plan.reviewerTask.id]: plan.reviewerMessages.length,
+                  },
+                  activeTurnIdsByTask: {
+                    ...cachedSession.activeTurnIdsByTask,
+                    [plan.reviewerTask.id]: plan.reviewerTurnId,
+                  },
+                  providerSessionByTask: {
+                    ...cachedSession.providerSessionByTask,
+                    [plan.reviewerTask.id]: plan.reviewerProviderSession,
+                  },
+                  nativeSessionReadyByTask: {
+                    ...cachedSession.nativeSessionReadyByTask,
+                    [plan.reviewerTask.id]: false,
+                  },
+                  promptDraftByTask: {
+                    ...cachedSession.promptDraftByTask,
+                    [plan.reviewerTask.id]: plan.reviewerPromptDraft,
+                  },
+                  activeColiseumsByTask: {
+                    ...cachedSession.activeColiseumsByTask,
+                    [parentTaskId]: plan.nextGroup,
+                  },
+                },
+              },
+            };
+          });
+
+          // Resolve workspace cwd for dispatch.
+          const { cwd: parentWorkspaceCwd } = resolveTaskWorkspaceContext({
+            taskId: parentTaskId,
+            activeWorkspaceId: state.activeWorkspaceId,
+            taskWorkspaceIdById: state.taskWorkspaceIdById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+            projectPath: state.projectPath,
+          });
+
+          const reviewerTaskId = plan.reviewerTask.id;
+          const reviewerTurnId = plan.reviewerTurnId;
+          const reviewerConversation = buildCanonicalConversationRequest({
+            turnId: reviewerTurnId,
+            taskId: reviewerTaskId,
+            workspaceId,
+            providerId: reviewerProvider,
+            model: reviewerModel,
+            history: [],
+            userInput: reviewerPrompt,
+            mode: "chat",
+            nativeSessionId: null,
+            retrievedContextParts: [],
+          });
+
+          const resolvedRuntimeState = resolvePromptDraftRuntimeState({
+            promptDraft: plan.reviewerPromptDraft,
+            fallback: {
+              claudePermissionMode: state.settings.claudePermissionMode,
+              claudePermissionModeBeforePlan:
+                state.settings.claudePermissionModeBeforePlan,
+              codexPlanMode: state.settings.codexPlanMode,
+            },
+          });
+
+          const turnActivityStartedAt = Date.now();
+          set((nextState) => ({
+            providerTurnActivityByTask: startProviderTurnActivity({
+              activityByTask: nextState.providerTurnActivityByTask,
+              taskId: reviewerTaskId,
+              turnId: reviewerTurnId,
+              providerId: reviewerProvider,
+              now: turnActivityStartedAt,
+            }),
+          }));
+          scheduleProviderTurnStallTimer({
+            taskId: reviewerTaskId,
+            turnId: reviewerTurnId,
+            lastEventAt: turnActivityStartedAt,
+          });
+
+          const reviewerEventController = createProviderTurnEventController({
+            flushEvents: (pendingEvents) => {
+              const currentState = get();
+              const applied = applyPendingProviderEventsToStoreState({
+                state: currentState,
+                taskWorkspaceId: workspaceId,
+                taskId: reviewerTaskId,
+                events: pendingEvents,
+                provider: reviewerProvider,
+                model: reviewerModel,
+                turnId: reviewerTurnId,
+              });
+              const turnStillActive =
+                currentState.activeTurnIdsByTask[reviewerTaskId] ===
+                reviewerTurnId;
+              const nextTurnActivityByTask = turnStillActive
+                ? applyProviderTurnActivityEvents({
+                    activityByTask: currentState.providerTurnActivityByTask,
+                    taskId: reviewerTaskId,
+                    turnId: reviewerTurnId,
+                    providerId: reviewerProvider,
+                    events: pendingEvents,
+                  })
+                : currentState.providerTurnActivityByTask;
+              const activityChanged =
+                nextTurnActivityByTask !==
+                currentState.providerTurnActivityByTask;
+              if (applied.stateChanged || activityChanged) {
+                set({
+                  ...applied.statePatch,
+                  ...(activityChanged
+                    ? {
+                        providerTurnActivityByTask: nextTurnActivityByTask,
+                      }
+                    : {}),
+                });
+              }
+
+              // Mirror reviewer task's assistant text into the group's
+              // `reviewerVerdict.content` so the arena card can subscribe
+              // directly to `group.reviewerVerdict` without pulling the
+              // reviewer task's messages (which are hidden from the task
+              // list by `coliseumParentTaskId`). Kept here rather than in
+              // the shared reducer so main task logic stays untouched.
+              mirrorReviewerVerdict({
+                set,
+                get,
+                parentTaskId,
+                reviewerTaskId,
+                workspaceId,
+                pendingEvents,
+              });
+
+              if (
+                !turnStillActive ||
+                pendingEvents.some((event) => event.type === "done")
+              ) {
+                clearProviderTurnStallTimer(reviewerTaskId);
+              } else {
+                const nextActivity = nextTurnActivityByTask[reviewerTaskId];
+                if (nextActivity) {
+                  scheduleProviderTurnStallTimer({
+                    taskId: reviewerTaskId,
+                    turnId: reviewerTurnId,
+                    lastEventAt: nextActivity.lastEventAt,
+                  });
+                }
+              }
+            },
+          });
+
+          runProviderTurn({
+            turnId: reviewerTurnId,
+            provider: reviewerProvider,
+            prompt: reviewerPrompt,
+            conversation: reviewerConversation,
+            taskId: reviewerTaskId,
+            workspaceId,
+            cwd: parentWorkspaceCwd,
+            runtimeOptions: applyProjectBasePromptToRuntimeOptions({
+              runtimeOptions: buildProviderRuntimeOptions({
+                provider: reviewerProvider,
+                model: reviewerModel,
+                settings: {
+                  ...get().settings,
+                  claudePermissionMode:
+                    resolvedRuntimeState.claudePermissionMode,
+                  codexPlanMode: resolvedRuntimeState.codexPlanMode,
+                },
+                providerSession: plan.reviewerProviderSession,
+              }),
+              projectBasePrompt: resolveProjectBasePrompt({
+                projectPath: get().projectPath,
+                recentProjects: get().recentProjects,
+              }),
+            }),
+            onEvent: ({ event }) =>
+              reviewerEventController.handleEvent(event),
+          });
+
+          return {
+            status: "started",
+            reviewerTaskId,
+            turnId: reviewerTurnId,
+          } as const;
+        },
+        clearColiseumReviewerVerdict: ({ parentTaskId }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          if (!group || (!group.reviewerTaskId && !group.reviewerVerdict)) {
+            return;
+          }
+          const reviewerTaskId = group.reviewerTaskId;
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const workspaceId = parentRuntimeTarget.workspaceId;
+
+          if (reviewerTaskId) {
+            const activeTurnId = state.activeTurnIdsByTask[reviewerTaskId];
+            const abortTurn = window.api?.provider?.abortTurn;
+            if (activeTurnId && abortTurn) {
+              void abortTurn({ turnId: activeTurnId });
+            }
+            clearProviderTurnStallTimer(reviewerTaskId);
+            const cleanupTask = window.api?.provider?.cleanupTask;
+            if (cleanupTask) {
+              void cleanupTask({ taskId: reviewerTaskId });
+            }
+          }
+
+          set((nextState) => {
+            const dropIds = reviewerTaskId ? [reviewerTaskId] : [];
+            const nextGroup = clearReviewerFromGroup(group);
+            if (workspaceId === nextState.activeWorkspaceId) {
+              return {
+                tasks:
+                  dropIds.length > 0
+                    ? nextState.tasks.filter(
+                        (task) => !dropIds.includes(task.id),
+                      )
+                    : nextState.tasks,
+                messagesByTask: stripColiseumBranchesFromRecords(
+                  nextState.messagesByTask,
+                  dropIds,
+                ),
+                messageCountByTask: stripColiseumBranchesFromRecords(
+                  nextState.messageCountByTask,
+                  dropIds,
+                ),
+                activeTurnIdsByTask: stripColiseumBranchesFromRecords(
+                  nextState.activeTurnIdsByTask,
+                  dropIds,
+                ),
+                providerSessionByTask: stripColiseumBranchesFromRecords(
+                  nextState.providerSessionByTask,
+                  dropIds,
+                ),
+                nativeSessionReadyByTask: stripColiseumBranchesFromRecords(
+                  nextState.nativeSessionReadyByTask,
+                  dropIds,
+                ),
+                promptDraftByTask: stripColiseumBranchesFromRecords(
+                  nextState.promptDraftByTask,
+                  dropIds,
+                ),
+                taskWorkspaceIdById: stripColiseumBranchesFromRecords(
+                  nextState.taskWorkspaceIdById,
+                  dropIds,
+                ),
+                activeColiseumsByTask: {
+                  ...nextState.activeColiseumsByTask,
+                  [parentTaskId]: nextGroup,
+                },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(nextState),
+              };
+            }
+            const cachedSession =
+              nextState.workspaceRuntimeCacheById[workspaceId];
+            if (!cachedSession) {
+              return nextState;
+            }
+            return {
+              taskWorkspaceIdById: stripColiseumBranchesFromRecords(
+                nextState.taskWorkspaceIdById,
+                dropIds,
+              ),
+              workspaceRuntimeCacheById: {
+                ...nextState.workspaceRuntimeCacheById,
+                [workspaceId]: {
+                  ...cachedSession,
+                  tasks:
+                    dropIds.length > 0
+                      ? cachedSession.tasks.filter(
+                          (task) => !dropIds.includes(task.id),
+                        )
+                      : cachedSession.tasks,
+                  messagesByTask: stripColiseumBranchesFromRecords(
+                    cachedSession.messagesByTask,
+                    dropIds,
+                  ),
+                  messageCountByTask: stripColiseumBranchesFromRecords(
+                    cachedSession.messageCountByTask,
+                    dropIds,
+                  ),
+                  activeTurnIdsByTask: stripColiseumBranchesFromRecords(
+                    cachedSession.activeTurnIdsByTask,
+                    dropIds,
+                  ),
+                  providerSessionByTask: stripColiseumBranchesFromRecords(
+                    cachedSession.providerSessionByTask,
+                    dropIds,
+                  ),
+                  nativeSessionReadyByTask: stripColiseumBranchesFromRecords(
+                    cachedSession.nativeSessionReadyByTask,
+                    dropIds,
+                  ),
+                  promptDraftByTask: stripColiseumBranchesFromRecords(
+                    cachedSession.promptDraftByTask,
+                    dropIds,
+                  ),
+                  activeColiseumsByTask: {
+                    ...cachedSession.activeColiseumsByTask,
+                    [parentTaskId]: nextGroup,
+                  },
                 },
               },
             };

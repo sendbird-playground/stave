@@ -2,7 +2,9 @@ import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import type {
   ChatMessage,
+  ColiseumBranchMeta,
   ColiseumGroupState,
+  ColiseumReviewerVerdict,
   ImageContextPart,
   MessagePart,
   PromptDraft,
@@ -79,6 +81,8 @@ export interface ColiseumFanOutInput {
   createTaskId?: () => string;
   /** Injected for deterministic tests. Defaults to `crypto.randomUUID`. */
   createTurnId?: () => string;
+  /** Injected for deterministic tests. Defaults to `crypto.randomUUID`. */
+  createRunId?: () => string;
   /** Injected for deterministic tests. Defaults to ISO now. */
   now?: () => string;
 }
@@ -158,6 +162,7 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
 
   const createTaskId = input.createTaskId ?? (() => crypto.randomUUID());
   const createTurnId = input.createTurnId ?? (() => crypto.randomUUID());
+  const createRunId = input.createRunId ?? (() => crypto.randomUUID());
   const now = input.now ?? buildRecentTimestamp;
 
   const parentMessageCountAtFanout = input.parentMessages.length;
@@ -182,11 +187,17 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
   const branchTaskWorkspaceIdById: Record<string, string> = {};
   const branchDispatchList: ColiseumBranchDispatch[] = [];
   const branchTaskIds: string[] = [];
+  const branchMeta: Record<string, ColiseumBranchMeta> = {};
 
   for (const branch of input.branches) {
     const childTaskId = branch.childTaskId ?? createTaskId();
     const turnId = branch.turnId ?? createTurnId();
     branchTaskIds.push(childTaskId);
+    branchMeta[childTaskId] = {
+      branchTaskId: childTaskId,
+      provider: branch.provider,
+      model: branch.model,
+    };
 
     const childTask: Task = {
       id: childTaskId,
@@ -256,9 +267,17 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
 
   const group: ColiseumGroupState = {
     parentTaskId: input.parentTask.id,
+    runId: createRunId(),
     branchTaskIds,
+    branchMeta,
     createdAt: now(),
     parentMessageCountAtFanout,
+    status: "running",
+    championTaskId: null,
+    pickedHistory: [],
+    viewMode: "grid",
+    focusedBranchTaskId: null,
+    minimized: false,
   };
 
   return {
@@ -304,15 +323,25 @@ export interface PromoteColiseumChampionInput {
   parentMessages: ChatMessage[];
   /** Champion branch's full message history (parent prefix + branch turn). */
   championMessages: ChatMessage[];
+  /**
+   * Whether there was a previous pick whose graft needs to be rolled back
+   * before applying the new champion's tail. When true, the first
+   * `parentMessageCountAtFanout` messages of `parentMessages` are preserved
+   * and everything after is replaced with the new champion's tail. Used to
+   * implement "re-pick".
+   */
+  replacePreviousPick?: boolean;
 }
 
 export interface PromoteColiseumChampionResult {
-  /** New parent messages: parent history + champion's post-fan-out tail, with IDs rewritten to the parent task id. */
+  /**
+   * New parent messages: parent history + champion's post-fan-out tail, with
+   * IDs rewritten to the parent task id. When `replacePreviousPick` is true,
+   * the previous champion's grafted tail is stripped first.
+   */
   nextParentMessages: ChatMessage[];
   /** Count of messages appended from the champion (tail length). */
   appendedFromChampion: number;
-  /** Child task ids that must be dropped (all branches, including champion). */
-  branchTaskIdsToDrop: string[];
 }
 
 /**
@@ -325,35 +354,93 @@ export interface PromoteColiseumChampionResult {
  * follow-up churn). We graft the tail onto the parent, rewriting message IDs
  * so they are keyed by the parent task id and contiguous with the existing
  * `parentMessages` length.
+ *
+ * Non-destructive: does **not** return a branch-drop list. Branches stay alive
+ * so the user can re-pick. Callers perform the actual drop via
+ * `discardColiseumRun`, which is an explicit destructive action.
+ *
+ * Also clears any `isStreaming` flag on the grafted tail so the parent doesn't
+ * render a stuck "waiting for response" state after the graft.
  */
 export function promoteColiseumChampion(
   input: PromoteColiseumChampionInput,
 ): PromoteColiseumChampionResult {
-  const { group, championTaskId, parentMessages, championMessages } = input;
+  const { group, championTaskId, championMessages } = input;
   if (!group.branchTaskIds.includes(championTaskId)) {
     throw new Error(
       `Champion taskId ${championTaskId} is not a branch of group ${group.parentTaskId}.`,
     );
   }
   const { parentTaskId, parentMessageCountAtFanout } = group;
+
+  // If re-picking, roll parent back to pre-fan-out, then graft the new champion.
+  const preGraftParentMessages = input.replacePreviousPick
+    ? input.parentMessages.slice(0, parentMessageCountAtFanout)
+    : input.parentMessages;
+
   const championTail = championMessages.slice(parentMessageCountAtFanout);
   const rewrittenTail: ChatMessage[] = championTail.map((msg, index) => ({
     ...msg,
-    id: `${parentTaskId}-m-${parentMessages.length + index + 1}`,
+    id: `${parentTaskId}-m-${preGraftParentMessages.length + index + 1}`,
+    // Force the grafted tail out of any streaming state — branches may still
+    // be streaming in the arena, but the parent's grafted copy is a snapshot
+    // of the champion's current content and should render as complete.
+    isStreaming: false,
     parts: msg.parts.map((part) => ({ ...part })),
   }));
   return {
-    nextParentMessages: [...parentMessages, ...rewrittenTail],
+    nextParentMessages: [...preGraftParentMessages, ...rewrittenTail],
     appendedFromChampion: rewrittenTail.length,
-    branchTaskIdsToDrop: group.branchTaskIds.slice(),
   };
 }
 
 /**
+ * Roll the parent's message history back to the pre-fan-out snapshot, undoing
+ * a previous `promoteColiseumChampion` graft. Used when the user unpicks a
+ * champion while the arena is still open.
+ */
+export function unpickColiseumChampion(input: {
+  group: ColiseumGroupState;
+  parentMessages: ChatMessage[];
+}): { nextParentMessages: ChatMessage[] } {
+  const { group, parentMessages } = input;
+  const preGraft = parentMessages.slice(
+    0,
+    group.parentMessageCountAtFanout,
+  );
+  return { nextParentMessages: preGraft };
+}
+
+/**
+ * Derive the "live" status of a Coliseum run from branch turn state.
+ *
+ * - If any branch has a live `activeTurnId`, status is `running`.
+ * - Otherwise, if a champion has been picked, status is `promoted`.
+ * - Otherwise, status is `ready`.
+ *
+ * `discarded` is not derivable from branch turn state — it is set explicitly
+ * by `discardColiseumRun` before removal and is used as a tombstone.
+ */
+export function deriveColiseumRunStatus(input: {
+  group: ColiseumGroupState;
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}): Exclude<ColiseumGroupState["status"], "discarded"> {
+  for (const branchTaskId of input.group.branchTaskIds) {
+    if (input.activeTurnIdsByTask[branchTaskId]) {
+      return "running";
+    }
+  }
+  if (input.group.championTaskId) {
+    return "promoted";
+  }
+  return "ready";
+}
+
+/**
  * Compute the state patch for removing a set of branch tasks entirely. Used by
- * `pickColiseumChampion` (after grafting the champion), `closeColiseumBranch`,
- * and `dismissColiseum`. Caller is responsible for also calling
- * `cleanupTask({ taskId })` on the provider IPC side to evict runtime caches.
+ * `closeColiseumBranch`, `discardColiseumRun`, and (legacy) `dismissColiseum`.
+ * Caller is responsible for also calling `cleanupTask({ taskId })` on the
+ * provider IPC side to evict runtime caches.
  */
 export function stripColiseumBranchesFromRecords<
   T extends Record<string, unknown>,
@@ -372,6 +459,396 @@ export function stripColiseumBranchesFromRecords<
     next[key] = record[key];
   }
   return (changed ? next : record) as T;
+}
+
+/** ============================================================================
+ * Reviewer role helpers
+ *
+ * The reviewer is a single additional LLM turn that compares the branches'
+ * outputs and surfaces a structured verdict. The *runtime* wiring (IPC +
+ * provider dispatch + streaming reducer) is out of scope here; this module
+ * only provides the pure transformations — branch summarization and prompt
+ * assembly — that the action layer will consume.
+ * ========================================================================= */
+
+/**
+ * Distilled summary of a single branch's output, suitable for handing to the
+ * reviewer LLM. Keeping this an explicit shape means the prompt format can
+ * evolve without leaking through the rest of the codebase.
+ */
+export interface ColiseumBranchSummary {
+  branchTaskId: string;
+  provider: ProviderId;
+  model: string;
+  /** Final assistant text (may be empty if the branch only used tools). */
+  assistantText: string;
+  /**
+   * List of file paths the branch wrote/edited, deduped and in the order the
+   * branch first touched them. Empty when the branch did no file changes.
+   */
+  changedFilePaths: string[];
+  /**
+   * Short one-line entries describing tool use — e.g. `"Bash: npm test"`,
+   * `"Edit: src/foo.ts"`. The reviewer uses these to tell *how* the branch
+   * reached its answer, not just *what* it wrote. Capped per branch to keep
+   * the reviewer prompt bounded.
+   */
+  toolTrace: string[];
+  /** Whether the branch was still streaming when summarized. */
+  isStreaming: boolean;
+}
+
+const REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH = 12;
+
+function extractFilePathFromToolInputRaw(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { file_path?: unknown; path?: unknown };
+    if (typeof parsed?.file_path === "string" && parsed.file_path.length > 0) {
+      return parsed.file_path;
+    }
+    if (typeof parsed?.path === "string" && parsed.path.length > 0) {
+      return parsed.path;
+    }
+  } catch {
+    // fall through — input isn't always JSON (e.g. Bash)
+  }
+  return null;
+}
+
+/**
+ * Reduce a branch's post-fan-out message list to the information the reviewer
+ * actually needs. Pulls only messages AFTER `parentMessageCountAtFanout` — the
+ * branch's own user prompt + assistant response — and ignores the parent
+ * prefix so the reviewer prompt stays compact.
+ *
+ * Pure: no store access, no provider calls. Tests exercise this directly.
+ */
+export function extractBranchSummary(input: {
+  branchMeta: ColiseumBranchMeta;
+  branchMessages: ChatMessage[];
+  parentMessageCountAtFanout: number;
+}): ColiseumBranchSummary {
+  const { branchMeta, branchMessages, parentMessageCountAtFanout } = input;
+  const tail = branchMessages.slice(parentMessageCountAtFanout);
+  const assistantMessages = tail.filter((m) => m.role === "assistant");
+  const lastAssistant = assistantMessages[assistantMessages.length - 1];
+
+  const assistantText =
+    assistantMessages
+      .flatMap((msg) =>
+        msg.parts
+          .filter((p): p is Extract<MessagePart, { type: "text" }> =>
+            p.type === "text",
+          )
+          .map((p) => p.text),
+      )
+      .join("\n")
+      .trim();
+
+  const changedFilePaths: string[] = [];
+  const seenFiles = new Set<string>();
+  const toolTrace: string[] = [];
+
+  for (const msg of assistantMessages) {
+    for (const part of msg.parts) {
+      if (part.type === "code_diff") {
+        if (!seenFiles.has(part.filePath)) {
+          seenFiles.add(part.filePath);
+          changedFilePaths.push(part.filePath);
+        }
+      } else if (part.type === "tool_use") {
+        // Keep tool trace short — the point is to give the reviewer a sense of
+        // approach, not a full replay. We also snapshot file paths here because
+        // some providers emit writes as `tool_use(Edit|Write|NotebookEdit)`
+        // rather than a `code_diff` part.
+        if (toolTrace.length < REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH) {
+          const filePath = extractFilePathFromToolInputRaw(part.input);
+          toolTrace.push(
+            filePath ? `${part.toolName}: ${filePath}` : part.toolName,
+          );
+        }
+        const fileEditingTools = new Set(["Edit", "Write", "NotebookEdit"]);
+        if (fileEditingTools.has(part.toolName)) {
+          const filePath = extractFilePathFromToolInputRaw(part.input);
+          if (filePath && !seenFiles.has(filePath)) {
+            seenFiles.add(filePath);
+            changedFilePaths.push(filePath);
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    branchTaskId: branchMeta.branchTaskId,
+    provider: branchMeta.provider,
+    model: branchMeta.model,
+    assistantText,
+    changedFilePaths,
+    toolTrace,
+    isStreaming: Boolean(lastAssistant?.isStreaming),
+  };
+}
+
+const REVIEWER_ASSISTANT_TEXT_MAX_CHARS = 4000;
+
+function truncateForPrompt(
+  text: string,
+  max: number,
+): { text: string; truncated: boolean } {
+  if (text.length <= max) return { text, truncated: false };
+  return {
+    text: `${text.slice(0, max)}\n…[truncated ${text.length - max} chars]`,
+    truncated: true,
+  };
+}
+
+export interface BuildReviewerPromptInput {
+  /** The exact prompt the user entered when they launched the Coliseum. */
+  originalUserPrompt: string;
+  /** One summary per branch, in the order the reviewer should consider them. */
+  branchSummaries: ColiseumBranchSummary[];
+}
+
+/**
+ * Assemble the markdown prompt handed to the reviewer LLM. The structure is
+ * designed to elicit a structured verdict: TL;DR → per-branch scorecard →
+ * key differences → recommendation. Kept pure so prompt churn is testable
+ * and reviewable via the test file.
+ */
+export function buildReviewerPrompt(input: BuildReviewerPromptInput): string {
+  const { originalUserPrompt, branchSummaries } = input;
+  if (branchSummaries.length === 0) {
+    throw new Error(
+      "buildReviewerPrompt needs at least one branch summary to compare.",
+    );
+  }
+
+  const lines: string[] = [];
+  lines.push(
+    "You are a senior code reviewer comparing the outputs of multiple models that were asked the same question in parallel (a 'Coliseum' run).",
+  );
+  lines.push("");
+  lines.push("# User's original request");
+  lines.push("");
+  lines.push("```");
+  lines.push(originalUserPrompt.trim() || "(empty)");
+  lines.push("```");
+  lines.push("");
+  lines.push(`# Branches (${branchSummaries.length})`);
+  lines.push("");
+  branchSummaries.forEach((summary, idx) => {
+    const label = `Branch ${idx + 1} — ${summary.provider} · ${summary.model}`;
+    lines.push(`## ${label}`);
+    if (summary.isStreaming) {
+      lines.push("");
+      lines.push("_Note: this branch was still streaming when captured._");
+    }
+    lines.push("");
+    lines.push("**Final assistant text:**");
+    lines.push("");
+    const { text: safeText, truncated } = truncateForPrompt(
+      summary.assistantText || "(no text — tool-only response)",
+      REVIEWER_ASSISTANT_TEXT_MAX_CHARS,
+    );
+    lines.push("```");
+    lines.push(safeText);
+    lines.push("```");
+    if (truncated) {
+      lines.push("");
+      lines.push("_(Reviewer: the text above was truncated for length.)_");
+    }
+    if (summary.changedFilePaths.length > 0) {
+      lines.push("");
+      lines.push("**Files changed:**");
+      for (const filePath of summary.changedFilePaths) {
+        lines.push(`- \`${filePath}\``);
+      }
+    }
+    if (summary.toolTrace.length > 0) {
+      lines.push("");
+      lines.push("**Tool trace (truncated):**");
+      for (const entry of summary.toolTrace) {
+        lines.push(`- ${entry}`);
+      }
+    }
+    lines.push("");
+  });
+  lines.push("# Your task");
+  lines.push("");
+  lines.push(
+    "Produce a concise, opinionated review in markdown. Structure it as:",
+  );
+  lines.push("");
+  lines.push(
+    "1. **TL;DR recommendation** — which branch do you suggest the user pick, and why (one sentence).",
+  );
+  lines.push(
+    "2. **Scorecard** — a short table of each branch with columns: Correctness, Completeness, Risk, Style. Use 1–5.",
+  );
+  lines.push(
+    "3. **Key differences** — bullet points on where the branches diverge (approach, file choices, trade-offs).",
+  );
+  lines.push(
+    "4. **Red flags** — anything that looks wrong or risky in any branch (bugs, security, missing edge cases).",
+  );
+  lines.push("");
+  lines.push(
+    "Be direct and specific. The user will use your review as input to picking a champion — don't hedge.",
+  );
+  return lines.join("\n");
+}
+
+export interface PlanReviewerLaunchInput {
+  /** Parent (non-branch) task hosting the Coliseum run. */
+  parentTask: Task;
+  /** Current group state — used for id/workspace bookkeeping. */
+  group: ColiseumGroupState;
+  /** Workspace id the parent task lives in; reviewer reuses it. */
+  parentTaskWorkspaceId: string;
+  /** Reviewer provider/model choice. */
+  reviewerProvider: ProviderId;
+  reviewerModel: string;
+  /** Composed reviewer prompt (from `buildReviewerPrompt`). */
+  reviewerPrompt: string;
+  /** Inherited runtime overrides from the parent task, if any. */
+  parentPromptDraft?: PromptDraft;
+  /** Injected for deterministic tests. Defaults to `crypto.randomUUID`. */
+  createTaskId?: () => string;
+  /** Injected for deterministic tests. Defaults to `crypto.randomUUID`. */
+  createTurnId?: () => string;
+  /** Injected for deterministic tests. Defaults to ISO now. */
+  now?: () => string;
+}
+
+export interface PlanReviewerLaunchResult {
+  /** The ephemeral reviewer task to merge into `state.tasks`. */
+  reviewerTask: Task;
+  /** Seeded messages for the reviewer task (reviewer prompt + empty assistant). */
+  reviewerMessages: ChatMessage[];
+  /** Stable turnId for the reviewer turn. */
+  reviewerTurnId: string;
+  /** Initial provider session record (empty). */
+  reviewerProviderSession: TaskProviderSessionState;
+  /** Initial verdict snapshot — streaming/empty text, no completedAt. */
+  reviewerVerdict: ColiseumReviewerVerdict;
+  /** Seed prompt draft mirroring parent overrides + reviewer model. */
+  reviewerPromptDraft: PromptDraft;
+  /** Next group state with `reviewerTaskId` + `reviewerVerdict` stamped. */
+  nextGroup: ColiseumGroupState;
+}
+
+/**
+ * Build the state patch for spinning up a reviewer turn. This is the mirror of
+ * `planColiseumFanOut` but for a single task: the reviewer reuses
+ * `coliseumParentTaskId` so the existing branch-visibility filter hides the
+ * reviewer task from the main task tree (zero changes to `Task` itself or the
+ * task list UI). The caller:
+ *  - merges `reviewerTask` into `state.tasks`
+ *  - seeds `messagesByTask[reviewerTask.id]` with `reviewerMessages`
+ *  - stamps `activeTurnIdsByTask[reviewerTask.id] = reviewerTurnId`
+ *  - stores `nextGroup` as the group state
+ *  - dispatches `runProviderTurn` with the reviewer prompt
+ *
+ * Keeping this pure matches the pattern used by `planColiseumFanOut` and lets
+ * tests exercise state transitions without touching the Zustand store.
+ */
+export function planReviewerLaunch(
+  input: PlanReviewerLaunchInput,
+): PlanReviewerLaunchResult {
+  const createTaskId = input.createTaskId ?? (() => crypto.randomUUID());
+  const createTurnId = input.createTurnId ?? (() => crypto.randomUUID());
+  const now = input.now ?? buildRecentTimestamp;
+
+  const reviewerTaskId = createTaskId();
+  const reviewerTurnId = createTurnId();
+
+  const reviewerTask: Task = {
+    id: reviewerTaskId,
+    // Title doubles as a stable debug label; hidden from task tree via the
+    // `coliseumParentTaskId` filter so the exact text is cosmetic.
+    title: `Coliseum Reviewer · ${input.parentTask.title}`,
+    provider: input.reviewerProvider,
+    updatedAt: now(),
+    unread: false,
+    archivedAt: null,
+    controlMode: input.parentTask.controlMode,
+    controlOwner: input.parentTask.controlOwner,
+    coliseumParentTaskId: input.parentTask.id,
+  };
+
+  const userMessage: ChatMessage = {
+    id: buildMessageId({ taskId: reviewerTaskId, count: 0 }),
+    role: "user",
+    model: "user",
+    providerId: "user",
+    content: input.reviewerPrompt,
+    parts: [createUserTextPart({ text: input.reviewerPrompt })],
+  };
+
+  const assistantMessage: ChatMessage = {
+    id: buildMessageId({ taskId: reviewerTaskId, count: 1 }),
+    role: "assistant",
+    model: input.reviewerModel,
+    providerId: input.reviewerProvider,
+    content: "",
+    startedAt: now(),
+    isStreaming: true,
+    parts: [],
+  };
+
+  const reviewerMessages: ChatMessage[] = [userMessage, assistantMessage];
+
+  const reviewerVerdict: ColiseumReviewerVerdict = {
+    status: "running",
+    providerId: input.reviewerProvider,
+    model: input.reviewerModel,
+    content: "",
+    startedAt: now(),
+  };
+
+  const parentOverrides = input.parentPromptDraft?.runtimeOverrides;
+  const reviewerPromptDraft: PromptDraft = {
+    text: "",
+    attachedFilePaths: [],
+    attachments: [],
+    runtimeOverrides: parentOverrides
+      ? { ...parentOverrides, model: input.reviewerModel }
+      : { model: input.reviewerModel },
+  };
+
+  const nextGroup: ColiseumGroupState = {
+    ...input.group,
+    reviewerTaskId,
+    reviewerVerdict,
+  };
+
+  return {
+    reviewerTask,
+    reviewerMessages,
+    reviewerTurnId,
+    reviewerProviderSession: {},
+    reviewerVerdict,
+    reviewerPromptDraft,
+    nextGroup,
+  };
+}
+
+/**
+ * Remove the reviewer from a group. Pure — used by `clearColiseumReviewerVerdict`
+ * and by `discardColiseumRun` when tearing the whole run down.
+ */
+export function clearReviewerFromGroup(
+  group: ColiseumGroupState,
+): ColiseumGroupState {
+  if (!group.reviewerTaskId && !group.reviewerVerdict) {
+    return group;
+  }
+  const next: ColiseumGroupState = { ...group };
+  delete next.reviewerTaskId;
+  delete next.reviewerVerdict;
+  return next;
 }
 
 export interface ReapColiseumOrphansInput {

@@ -252,13 +252,81 @@ export interface Task {
 }
 
 /**
+ * Possible status for a Coliseum run. Persisted beyond the first verdict so the
+ * user can re-pick, review, or minimize/restore the arena without losing state.
+ * - `running` — at least one branch is still streaming.
+ * - `ready` — every branch has finished streaming; no champion picked yet.
+ * - `promoted` — a champion was picked; branches stay alive for re-pick.
+ * - `discarded` — user explicitly discarded the run; UI should clean up
+ *   shortly after. Acts as a tombstone so deletion can be animated rather than
+ *   happening mid-render.
+ */
+export type ColiseumRunStatus =
+  | "running"
+  | "ready"
+  | "promoted"
+  | "discarded";
+
+/**
+ * Arena layout mode. `grid` shows every branch side-by-side; `focus` promotes a
+ * single branch to the main area while the rest collapse into a rail so the
+ * user can concentrate on one answer without losing multi-branch context.
+ */
+export type ColiseumViewMode = "grid" | "focus";
+
+/**
+ * Authoritative per-branch metadata captured at fan-out time. The column
+ * header reads `provider` / `model` from here rather than from the branch's
+ * first assistant message, because assistant messages stream in with a lag
+ * and cause every column to fall back to the provider label (making models
+ * look identical).
+ */
+export interface ColiseumBranchMeta {
+  branchTaskId: string;
+  provider: "claude-code" | "codex" | "stave";
+  model: string;
+}
+
+/**
+ * Runtime state for the optional "reviewer" role that compares branch outputs
+ * and surfaces a structured verdict. Populated by `launchColiseumReviewer` and
+ * cleared by `clearColiseumReviewerVerdict`; absent on the group when the user
+ * has not asked for a review yet.
+ *
+ * Kept on the group rather than in a separate map so it dies with the run
+ * (close/discard clears everything together) and minimize/restore preserves it.
+ */
+export interface ColiseumReviewerVerdict {
+  /** Monotonic lifecycle — no pause/resume. */
+  status: "running" | "complete" | "error";
+  /** Provider/model chosen for the review — shown in the verdict card header. */
+  providerId: "claude-code" | "codex" | "stave";
+  model: string;
+  /** Accumulated assistant text (markdown). Streams in as the reviewer responds. */
+  content: string;
+  startedAt: string;
+  completedAt?: string;
+  /** Human-readable reason when `status === "error"`. */
+  errorMessage?: string;
+}
+
+/**
  * Runtime-only state for a Coliseum — a multi-model parallel turn. Keyed in
  * the store by the parent task id. Not persisted — orphaned branch tasks are
  * reaped on workspace bootstrap if their parent's group is gone.
+ *
+ * The run is intentionally *not* destroyed when a champion is picked; branches
+ * live on so the user can re-pick, compare further, or minimize the arena and
+ * come back later. A separate `discardColiseumRun` action performs the actual
+ * cleanup.
  */
 export interface ColiseumGroupState {
   parentTaskId: string;
+  /** Stable per-run id; lets future multi-run support key by id. */
+  runId: string;
   branchTaskIds: string[];
+  /** Keyed by branch task id. Authoritative source for provider/model. */
+  branchMeta: Record<string, ColiseumBranchMeta>;
   createdAt: string;
   /**
    * Number of messages in the parent task at fan-out time. Each branch's
@@ -267,9 +335,48 @@ export interface ColiseumGroupState {
    * is the branch's own user message + streaming assistant response.
    *
    * Used by `pickColiseumChampion` to compute the champion-only diff to graft
-   * onto the parent.
+   * onto the parent, and by `unpickColiseumChampion` to revert.
    */
   parentMessageCountAtFanout: number;
+  /**
+   * Whether the arena is running, ready, promoted, or discarded. Renderers key
+   * UI affordances off this (e.g. hide "Pick champion" while `running`).
+   */
+  status: ColiseumRunStatus;
+  /** Current champion (if any). `null` when no pick has been made. */
+  championTaskId?: string | null;
+  /**
+   * Ordered history of picks so the user can see what they tried before. Every
+   * `pickColiseumChampion` call appends to this list; unpick does not pop.
+   */
+  pickedHistory: Array<{ championTaskId: string; pickedAt: string }>;
+  /** Arena layout preference; toggled from the arena header. */
+  viewMode: ColiseumViewMode;
+  /** When `viewMode === "focus"`, the branch promoted to the main area. */
+  focusedBranchTaskId?: string | null;
+  /**
+   * Transient UI flag — when true, the session area hides the arena and shows
+   * the regular ChatPanel + a "Coliseum paused" pill the user can click to
+   * restore. Branches are fully alive; nothing destructive happens.
+   */
+  minimized: boolean;
+  /**
+   * Optional reviewer verdict for this run. Undefined when no review has been
+   * launched. See `ColiseumReviewerVerdict` for the lifecycle.
+   */
+  reviewerVerdict?: ColiseumReviewerVerdict;
+  /**
+   * Ephemeral task id hosting the reviewer turn. Kept on the group so discard
+   * can abort + clean up the reviewer task alongside branches, and so message
+   * streaming events routed through the existing provider-turn runtime can be
+   * mirrored into `reviewerVerdict.content` without touching the main task
+   * dispatch logic.
+   *
+   * Set via `launchColiseumReviewer`; cleared by `clearColiseumReviewerVerdict`
+   * and by `discardColiseumRun`. The task itself has `coliseumParentTaskId`
+   * set so the existing branch-visibility filter hides it from the task tree.
+   */
+  reviewerTaskId?: string | null;
 }
 
 export interface EditorTab {

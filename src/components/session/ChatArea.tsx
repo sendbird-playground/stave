@@ -1,4 +1,4 @@
-import { FolderOpen, Layers } from "lucide-react";
+import { FolderOpen, Layers, Swords } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -246,6 +246,10 @@ function ChatAreaImpl() {
   }
 
   if (viewMode === "empty_task") {
+    // The Coliseum launcher is intentionally shown even on a brand-new task —
+    // picking a model with Coliseum is itself a way to start the task, so
+    // hiding the button until after the first turn sent it to a dead end.
+    const canStartColiseum = activeTask != null && !activeTurnId;
     return (
       <div {...sessionAreaProps}>
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -254,11 +258,19 @@ function ChatAreaImpl() {
               <EmptySplash
                 layout="top-card"
                 title="Start this task"
-                description="Send the first prompt to begin work in this workspace."
+                description="Send the first prompt to begin work in this workspace — or use the Coliseum below to compare answers from multiple models in parallel."
               />
             </div>
           </div>
           <div ref={chatInputDockRef} className="relative z-30 shrink-0">
+            {activeTask ? (
+              <ColiseumLauncherStrip
+                parentTaskId={activeTaskId}
+                defaultProviderId={activeTask.provider}
+                canStartColiseum={canStartColiseum}
+                hint="Try Coliseum to run your first prompt against multiple models at once."
+              />
+            ) : null}
             <RenderProfiler id="ChatInput" thresholdMs={8}>
               <ChatInput />
             </RenderProfiler>
@@ -268,13 +280,10 @@ function ChatAreaImpl() {
     );
   }
 
-  // When the active task has a live Coliseum group, switch the whole session
-  // area to the arena layout: PlanViewer, ChatInput, and the normal ChatPanel
-  // are all hidden because branches carry their own ephemeral state and the
-  // prompt is already locked in. Once the user promotes a champion (or
-  // dismisses), the group clears from `activeColiseumsByTask` and we fall back
-  // to the default layout on the next render.
-  if (activeColiseum) {
+  // When the active task has a live Coliseum group that is *not* minimized,
+  // switch the whole session area to the arena layout. A minimized arena
+  // keeps its state but falls back to the chat view with a restore pill.
+  if (activeColiseum && !activeColiseum.minimized) {
     return (
       <div {...sessionAreaProps}>
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -302,20 +311,134 @@ function ChatAreaImpl() {
         </RenderProfiler>
         <TodoFloater inputDockHeight={chatInputDockHeight} />
         <div ref={chatInputDockRef} className="relative z-30 shrink-0">
+          {activeColiseum?.minimized ? (
+            <ColiseumMinimizedPill parentTaskId={activeTaskId} />
+          ) : null}
           {activeTask ? (
-            <div className="flex items-center justify-end border-t border-border/50 bg-background/60 px-3 py-1 supports-backdrop-filter:backdrop-blur-xs">
-              <ColiseumLauncherDialog
-                parentTaskId={activeTaskId}
-                defaultProviderId={activeTask.provider}
-                disabled={!canStartColiseum}
-                disabledReason={coliseumDisabledReason}
-              />
-            </div>
+            <ColiseumLauncherStrip
+              parentTaskId={activeTaskId}
+              defaultProviderId={activeTask.provider}
+              canStartColiseum={canStartColiseum && !activeColiseum?.minimized}
+              disabledReason={
+                activeColiseum?.minimized
+                  ? "Reopen the paused Coliseum to close or discard it before starting another."
+                  : coliseumDisabledReason
+              }
+            />
           ) : null}
           <RenderProfiler id="ChatInput" thresholdMs={8}>
             <ChatInput />
           </RenderProfiler>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface ColiseumLauncherStripProps {
+  parentTaskId: string;
+  defaultProviderId: "claude-code" | "codex" | "stave";
+  canStartColiseum: boolean;
+  disabledReason?: string;
+  hint?: string;
+}
+
+function ColiseumLauncherStrip(props: ColiseumLauncherStripProps) {
+  // Transparent strip — width tracks the `max-w-6xl` content column so the
+  // launcher stays visually anchored to the chat (not the far-right viewport
+  // edge). No full-width opaque background, so the TodoFloater (which
+  // anchors to `right: 16px` above the input dock) can't be covered by a
+  // strip bleeding under it. Keeps `z-30` via the parent dock wrapper.
+  return (
+    <div className="px-3 pt-1.5 pb-0.5">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-2">
+        {props.hint ? (
+          <span className="hidden min-w-0 truncate text-[11px] text-muted-foreground sm:inline">
+            {props.hint}
+          </span>
+        ) : null}
+        <div className="ml-auto flex items-center rounded-full border border-border/60 bg-background/85 p-0.5 shadow-sm supports-backdrop-filter:backdrop-blur-xs">
+          <ColiseumLauncherDialog
+            parentTaskId={props.parentTaskId}
+            defaultProviderId={props.defaultProviderId}
+            disabled={!props.canStartColiseum}
+            disabledReason={props.disabledReason}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ColiseumMinimizedPill(props: { parentTaskId: string }) {
+  const [
+    restoreColiseum,
+    discardColiseumRun,
+    runningCount,
+    totalCount,
+    championPicked,
+  ] = useAppStore(
+    useShallow((state) => {
+      const group = state.activeColiseumsByTask[props.parentTaskId];
+      const running = group
+        ? group.branchTaskIds.filter(
+            (branchId) => state.activeTurnIdsByTask[branchId],
+          ).length
+        : 0;
+      return [
+        state.restoreColiseum,
+        state.discardColiseumRun,
+        running,
+        group?.branchTaskIds.length ?? 0,
+        Boolean(group?.championTaskId),
+      ] as const;
+    }),
+  );
+  const statusText = championPicked
+    ? "Champion picked"
+    : runningCount > 0
+      ? `${runningCount} of ${totalCount} still running`
+      : `${totalCount} branches ready`;
+  // Content-width pill, same rationale as ColiseumLauncherStrip: anchor to
+  // the `max-w-6xl` column and keep the background confined to the pill so
+  // the TodoFloater (`right: 16px`) isn't covered by a full-width strip.
+  return (
+    <div className="px-3 pt-1.5 pb-0.5 text-xs">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-2 rounded-full border border-border/60 bg-muted/60 px-3 py-1 shadow-sm supports-backdrop-filter:backdrop-blur-xs">
+      <Swords className="size-3.5 text-muted-foreground" />
+      <span className="truncate text-foreground">Coliseum paused</span>
+      <span className="truncate text-muted-foreground">· {statusText}</span>
+      <div className="ml-auto flex items-center gap-1.5">
+        {/*
+         * When a champion has been promoted, expose a one-click close so the
+         * user can immediately start a follow-up Coliseum on the same task
+         * without having to reopen the arena first. The champion's answer is
+         * already grafted on the parent, so this is lossless.
+         */}
+        {championPicked ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 rounded-sm px-2 text-xs shadow-none"
+            onClick={() =>
+              discardColiseumRun({ parentTaskId: props.parentTaskId })
+            }
+            title="Keep the champion's answer and close the arena so you can start a new Coliseum."
+          >
+            Close & keep champion
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 rounded-sm px-2 text-xs shadow-none"
+          onClick={() => restoreColiseum({ parentTaskId: props.parentTaskId })}
+        >
+          Reopen arena
+        </Button>
+      </div>
       </div>
     </div>
   );
