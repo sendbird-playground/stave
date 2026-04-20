@@ -21,6 +21,7 @@ import type {
 import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -102,6 +103,7 @@ import {
   PromptInputRuntimeBar,
   type PromptInputRuntimeStatusItem,
 } from "./prompt-input-runtime-bar";
+import { ModelIcon } from "./model-icon";
 import { Suggestion, Suggestions } from "./suggestion";
 
 interface PromptInputProps {
@@ -154,6 +156,7 @@ interface PromptInputProps {
     answers: Record<string, string>;
   }) => void;
   onUserInputDeny?: (args: { messageId: string }) => void;
+  leadingToolbarAction?: ReactNode;
   crossReviewProvider?: "claude-code" | "codex" | null;
   onCrossReview?: (args: { instructions?: string }) => void;
   onSubmit: (args: {
@@ -240,7 +243,7 @@ function CrossReviewPopover(args: {
 }) {
   const [open, setOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
-  const providerLabel = args.provider === "codex" ? "Codex" : "Claude";
+  const providerLabel = args.provider === "codex" ? "Codex" : "Claude Code";
   const crossReviewLabel = `Review by ${providerLabel}`;
 
   function handleSubmit() {
@@ -266,7 +269,8 @@ function CrossReviewPopover(args: {
             >
               <GitPullRequest className="size-3.5" />
               <span>Review by</span>
-              <span className="rounded-full bg-secondary/20 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.12em] text-secondary-foreground/70">
+              <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                <ModelIcon providerId={args.provider} className="size-3.5" />
                 {providerLabel}
               </span>
             </Button>
@@ -291,9 +295,10 @@ function CrossReviewPopover(args: {
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-foreground">
-                  Review by {providerLabel}
+                  Review by
                 </p>
-                <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <ModelIcon providerId={args.provider} className="size-3.5" />
                   {providerLabel}
                 </span>
               </div>
@@ -386,6 +391,7 @@ export function PromptInput(args: PromptInputProps) {
     pendingUserInput,
     onUserInputSubmit,
     onUserInputDeny,
+    leadingToolbarAction,
     crossReviewProvider,
     onCrossReview,
     onSubmit,
@@ -1864,14 +1870,13 @@ export function PromptInput(args: PromptInputProps) {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
                       disabled={interactionsDisabled}
-                      className={cn(PROMPT_TOOLBAR_BUTTON)}
+                      className={cn(PROMPT_TOOLBAR_ICON_BUTTON, "h-9 w-9")}
                       aria-label="Current Runtime"
                       title="Current runtime status"
                     >
                       <SlidersHorizontal className="size-3.5" />
-                      <span>Runtime</span>
                     </Button>
                   </DrawerTrigger>
                   <DrawerContent className="border-border/80 bg-background/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
@@ -1896,6 +1901,7 @@ export function PromptInput(args: PromptInputProps) {
             </div>
           ) : null}
           <div className="flex items-center gap-2">
+            {leadingToolbarAction}
             {crossReviewProvider && !isTurnActive ? (
               <CrossReviewPopover
                 provider={crossReviewProvider}
