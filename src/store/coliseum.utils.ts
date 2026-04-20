@@ -436,6 +436,53 @@ export function deriveColiseumRunStatus(input: {
   return "ready";
 }
 
+export interface ColiseumActivitySummary {
+  runningArenaCount: number;
+  runningBranchCount: number;
+  runningReviewerCount: number;
+  hasActivity: boolean;
+}
+
+export function summarizeColiseumActivity(input: {
+  activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}): ColiseumActivitySummary {
+  let runningArenaCount = 0;
+  let runningBranchCount = 0;
+  let runningReviewerCount = 0;
+
+  for (const group of Object.values(input.activeColiseumsByTask)) {
+    if (!group) {
+      continue;
+    }
+
+    const branchRunningCount = group.branchTaskIds.reduce(
+      (count, branchTaskId) =>
+        count + (input.activeTurnIdsByTask[branchTaskId] ? 1 : 0),
+      0,
+    );
+    const reviewerRunning = Boolean(
+      (group.reviewerTaskId && input.activeTurnIdsByTask[group.reviewerTaskId])
+      || group.reviewerVerdict?.status === "running",
+    );
+
+    if (branchRunningCount > 0 || reviewerRunning) {
+      runningArenaCount += 1;
+    }
+    runningBranchCount += branchRunningCount;
+    if (reviewerRunning) {
+      runningReviewerCount += 1;
+    }
+  }
+
+  return {
+    runningArenaCount,
+    runningBranchCount,
+    runningReviewerCount,
+    hasActivity: runningArenaCount > 0,
+  };
+}
+
 /**
  * Compute the state patch for removing a set of branch tasks entirely. Used by
  * `closeColiseumBranch`, `discardColiseumRun`, and (legacy) `dismissColiseum`.
@@ -498,7 +545,7 @@ export interface ColiseumBranchSummary {
   isStreaming: boolean;
 }
 
-const REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH = 12;
+const REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH = 6;
 
 function extractFilePathFromToolInputRaw(raw: string): string | null {
   if (!raw) return null;
@@ -591,7 +638,7 @@ export function extractBranchSummary(input: {
   };
 }
 
-const REVIEWER_ASSISTANT_TEXT_MAX_CHARS = 4000;
+const REVIEWER_ASSISTANT_TEXT_MAX_CHARS = 2200;
 
 function truncateForPrompt(
   text: string,
@@ -697,6 +744,127 @@ export function buildReviewerPrompt(input: BuildReviewerPromptInput): string {
   lines.push(
     "Be direct and specific. The user will use your review as input to picking a champion — don't hedge.",
   );
+  return lines.join("\n");
+}
+
+export interface BuildColiseumMergedFollowUpInput {
+  reviewerVerdict: Pick<ColiseumReviewerVerdict, "content">;
+  branchSummaries: ColiseumBranchSummary[];
+  championTaskId?: string | null;
+}
+
+const MERGED_FOLLOW_UP_REVIEW_MAX_CHARS = 2800;
+const MERGED_FOLLOW_UP_BRANCH_TEXT_MAX_CHARS = 1600;
+
+/**
+ * Build a parent-task follow-up prompt that asks the model to synthesize one
+ * merged answer from the Coliseum review + branch outputs. This is staged as a
+ * draft on the parent task so the user can inspect/edit it before sending.
+ */
+export function buildColiseumMergedFollowUp(
+  input: BuildColiseumMergedFollowUpInput,
+): string {
+  if (input.branchSummaries.length === 0) {
+    throw new Error(
+      "buildColiseumMergedFollowUp needs at least one branch summary.",
+    );
+  }
+
+  const includedBranches =
+    input.championTaskId
+      ? input.branchSummaries.filter(
+          (summary) => summary.branchTaskId !== input.championTaskId,
+        )
+      : input.branchSummaries;
+
+  const lines: string[] = [];
+  lines.push(
+    "Please produce one merged final answer for this task using the Coliseum review and branch outputs below.",
+  );
+  if (input.championTaskId) {
+    lines.push(
+      "The current champion answer is already in this conversation. Treat it as the base answer, improve it, and pull in only the strongest ideas from the other branches.",
+    );
+  } else {
+    lines.push(
+      "No champion has been picked yet. Choose the best base approach from the branch outputs below and synthesize a single stronger final answer.",
+    );
+  }
+  lines.push(
+    "Follow the reviewer's recommendation where branches disagree, fix any red flags it calls out, and mention real trade-offs only when they materially matter.",
+  );
+  lines.push(
+    "Return the merged answer itself. Do not explain the merge process unless it is directly useful to the user.",
+  );
+  lines.push("");
+  lines.push("# Reviewer verdict");
+  lines.push("");
+  const { text: reviewerText } = truncateForPrompt(
+    input.reviewerVerdict.content.trim() || "(review completed without text)",
+    MERGED_FOLLOW_UP_REVIEW_MAX_CHARS,
+  );
+  lines.push("```md");
+  lines.push(reviewerText);
+  lines.push("```");
+  lines.push("");
+
+  if (input.championTaskId) {
+    const champion = input.branchSummaries.find(
+      (summary) => summary.branchTaskId === input.championTaskId,
+    );
+    if (champion) {
+      lines.push(
+        `Current champion already in the conversation: ${champion.provider} / ${champion.model}`,
+      );
+      lines.push("");
+    }
+  }
+
+  lines.push(
+    `# ${input.championTaskId ? "Other branch outputs" : "Branch outputs"}`,
+  );
+  lines.push("");
+
+  includedBranches.forEach((summary, index) => {
+    lines.push(
+      `## Branch ${index + 1} — ${summary.provider} / ${summary.model}`,
+    );
+    if (summary.isStreaming) {
+      lines.push("");
+      lines.push("_Note: this branch was still streaming when captured._");
+    }
+    lines.push("");
+    lines.push("**Final assistant text:**");
+    lines.push("");
+    const { text: branchText, truncated } = truncateForPrompt(
+      summary.assistantText || "(no text — tool-only response)",
+      MERGED_FOLLOW_UP_BRANCH_TEXT_MAX_CHARS,
+    );
+    lines.push("```");
+    lines.push(branchText);
+    lines.push("```");
+    if (truncated) {
+      lines.push("");
+      lines.push("_(Branch text was truncated for length.)_");
+    }
+    if (summary.changedFilePaths.length > 0) {
+      lines.push("");
+      lines.push("**Files changed:**");
+      for (const filePath of summary.changedFilePaths) {
+        lines.push(`- \`${filePath}\``);
+      }
+    }
+    if (summary.toolTrace.length > 0) {
+      lines.push("");
+      lines.push("**Tool trace (truncated):**");
+      for (const entry of summary.toolTrace) {
+        lines.push(`- ${entry}`);
+      }
+    }
+    lines.push("");
+  });
+
+  lines.push('— (auto-generated from Coliseum "Draft merged answer")');
   return lines.join("\n");
 }
 

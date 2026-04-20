@@ -251,6 +251,34 @@ export function getRenderableMessageParts(message: Pick<ChatMessage, "content" |
   return [{ type: "text", text: message.content }];
 }
 
+export function hasRenderableMessageBody(message: Pick<ChatMessage, "content" | "parts" | "isStreaming">) {
+  return getMessageBodyFallbackState({
+    isActivelyStreaming: Boolean(message.isStreaming),
+    renderableParts: getRenderableMessageParts(message),
+  }) === "content";
+}
+
+export function getLatestRenderableAssistantMessage<
+  T extends Pick<ChatMessage, "role" | "content" | "parts" | "isStreaming">,
+>(messages: T[]) {
+  let latestStreamingAssistant: T | null = null;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== "assistant") {
+      continue;
+    }
+    if (!latestStreamingAssistant && message.isStreaming) {
+      latestStreamingAssistant = message;
+    }
+    if (hasRenderableMessageBody(message)) {
+      return message;
+    }
+  }
+
+  return latestStreamingAssistant;
+}
+
 export function isCodeDiffSummarySystemEvent(content: string): boolean {
   const normalized = content.trimStart().toLowerCase();
   return (

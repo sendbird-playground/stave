@@ -225,6 +225,7 @@ import {
   runProviderTurn,
 } from "@/store/provider-turn-runtime";
 import {
+  buildColiseumMergedFollowUp,
   buildReviewerPrompt,
   clearReviewerFromGroup,
   extractBranchSummary,
@@ -1372,6 +1373,14 @@ interface AppState {
   enqueueColiseumIncorporateFollowUp: (args: {
     parentTaskId: string;
     branchTaskId: string;
+  }) => void;
+  /**
+   * Stage a merged-answer follow-up on the parent task using the latest
+   * reviewer verdict plus branch summaries. This preserves user authorship:
+   * no provider turn starts until the user sends the drafted follow-up.
+   */
+  enqueueColiseumMergedFollowUp: (args: {
+    parentTaskId: string;
   }) => void;
   /**
    * Spawn an ephemeral reviewer task that compares branch outputs and streams
@@ -10510,16 +10519,22 @@ export const useAppStore = create<AppState>()(
 
           const parentPromptDraft =
             parentWorkspaceSession.promptDraftByTask[parentTaskId];
-          const resolvedFileContexts = await getDraftFileContexts({
-            promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
-            session: parentWorkspaceSession,
-            workspaceRootPath: parentWorkspaceCwd,
-            fileContexts,
-          });
-          const resolvedImageContexts = getDraftImageContexts({
-            promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
-            imageContexts,
-          });
+          const resolvedFileContexts =
+            fileContexts !== undefined
+              ? fileContexts
+              : await getDraftFileContexts({
+                  promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
+                  session: parentWorkspaceSession,
+                  workspaceRootPath: parentWorkspaceCwd,
+                  fileContexts,
+                });
+          const resolvedImageContexts =
+            imageContexts !== undefined
+              ? imageContexts
+              : getDraftImageContexts({
+                  promptDraft: parentPromptDraft ?? EMPTY_PROMPT_DRAFT,
+                  imageContexts,
+                });
 
           // Re-read state in case file reads yielded the event loop.
           state = get();
@@ -11556,8 +11571,58 @@ export const useAppStore = create<AppState>()(
 
           const providerLabel = meta.provider;
           const modelLabel = meta.model;
-          const followUpText = `Please also incorporate ideas from the ${providerLabel}/${modelLabel} branch's answer (below). Reconcile with the current champion where they overlap, and call out explicit trade-offs if something has to give.\n\n${quotedText}\n\n— (auto-generated from Coliseum "Also incorporate from…")`;
+          const followUpText = `Please also use useful ideas from the ${providerLabel}/${modelLabel} branch's answer (below). Reconcile with the current champion where they overlap, and call out explicit trade-offs if something has to give.\n\n${quotedText}\n\n— (auto-generated from Coliseum "Use ideas from…")`;
 
+          const currentDraft =
+            parentSession.promptDraftByTask[parentTaskId] ?? EMPTY_PROMPT_DRAFT;
+          const separator = currentDraft.text.trim().length > 0 ? "\n\n" : "";
+          const nextText = `${currentDraft.text}${separator}${followUpText}`;
+
+          get().updatePromptDraft({
+            taskId: parentTaskId,
+            patch: { text: nextText },
+          });
+        },
+        enqueueColiseumMergedFollowUp: ({ parentTaskId }) => {
+          const state = get();
+          const group = state.activeColiseumsByTask[parentTaskId];
+          const reviewerVerdict = group?.reviewerVerdict;
+          if (!group || !reviewerVerdict || reviewerVerdict.status !== "complete") {
+            return;
+          }
+          const parentRuntimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: parentTaskId,
+          });
+          if (!parentRuntimeTarget) {
+            return;
+          }
+          const parentSession = parentRuntimeTarget.session;
+
+          const branchSummaries = group.branchTaskIds
+            .map((branchId) => {
+              const meta = group.branchMeta[branchId];
+              if (!meta) return null;
+              const branchMessages =
+                parentSession.messagesByTask[branchId] ?? [];
+              return extractBranchSummary({
+                branchMeta: meta,
+                branchMessages,
+                parentMessageCountAtFanout: group.parentMessageCountAtFanout,
+              });
+            })
+            .filter((summary): summary is NonNullable<typeof summary> =>
+              summary !== null
+            );
+          if (branchSummaries.length === 0) {
+            return;
+          }
+
+          const followUpText = buildColiseumMergedFollowUp({
+            reviewerVerdict,
+            branchSummaries,
+            championTaskId: group.championTaskId,
+          });
           const currentDraft =
             parentSession.promptDraftByTask[parentTaskId] ?? EMPTY_PROMPT_DRAFT;
           const separator = currentDraft.text.trim().length > 0 ? "\n\n" : "";

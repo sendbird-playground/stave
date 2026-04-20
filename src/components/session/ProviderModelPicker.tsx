@@ -37,7 +37,7 @@ interface ProviderModelPickerProps {
   providerAvailable?: boolean;
   /** Width of the provider select. Keeps launcher/reviewer visually consistent. */
   providerSelectClassName?: string;
-  /** Width of the model select. Defaults to flex-1 so it fills remaining space. */
+  /** Width of the model select. Defaults to filling the remaining space. */
   modelSelectClassName?: string;
 }
 
@@ -60,7 +60,7 @@ export function ProviderModelPicker(args: ProviderModelPickerProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2",
+        "flex w-full min-w-0 items-center gap-2",
         !providerAvailable && "rounded-md ring-1 ring-destructive/40",
       )}
     >
@@ -72,7 +72,7 @@ export function ProviderModelPicker(args: ProviderModelPickerProps) {
         <SelectTrigger
           className={cn(
             "h-8 text-xs",
-            args.providerSelectClassName ?? "w-[150px]",
+            args.providerSelectClassName ?? "w-[150px] shrink-0",
           )}
         >
           <SelectValue />
@@ -100,8 +100,8 @@ export function ProviderModelPicker(args: ProviderModelPickerProps) {
       >
         <SelectTrigger
           className={cn(
-            "h-8 text-xs",
-            args.modelSelectClassName ?? "flex-1",
+            "h-8 w-full min-w-0 flex-1 text-xs",
+            args.modelSelectClassName ?? "",
           )}
         >
           <SelectValue />
