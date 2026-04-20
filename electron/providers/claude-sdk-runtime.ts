@@ -98,6 +98,25 @@ const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
   CLAUDE_MUTATING_FILE_TOOL_NAMES.map((toolName) => toolName.toLowerCase()),
 );
 const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set(["exitplanmode"]);
+/**
+ * Claude Code built-in tools that cannot mutate the filesystem or task state.
+ * In plan mode these are safe to auto-allow — the whole point of plan mode is
+ * that only read-only work is permitted, so surfacing an approval prompt for
+ * each Read/Grep/Glob/WebFetch/WebSearch/BashOutput/NotebookRead call is pure
+ * noise. Bash is intentionally excluded: even "read-only" commands can have
+ * network side effects, so we keep prompting for it.
+ */
+const CLAUDE_READ_ONLY_BUILTIN_TOOL_NAMES = new Set([
+  "read",
+  "grep",
+  "glob",
+  "ls",
+  "notebookread",
+  "webfetch",
+  "websearch",
+  "bashoutput",
+  "todoread",
+]);
 const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
   "stave_get_workspace_information",
   "stave_replace_workspace_notes",
@@ -468,6 +487,16 @@ export function resolveClaudePermissionModeDecision(args: {
   if (
     (args.permissionMode === "acceptEdits" || args.permissionMode === "auto") &&
     CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES.has(normalizedToolName)
+  ) {
+    return "allow" as const;
+  }
+  // Plan mode is read-only by construction: mutating tools are hard-denied in
+  // the canUseTool callback, so every remaining Claude Code built-in read tool
+  // can be auto-allowed. Prompting the user for each Read/Grep/Glob call in a
+  // read-only mode is redundant friction.
+  if (
+    args.permissionMode === "plan" &&
+    CLAUDE_READ_ONLY_BUILTIN_TOOL_NAMES.has(normalizedToolName)
   ) {
     return "allow" as const;
   }

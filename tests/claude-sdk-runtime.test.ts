@@ -407,6 +407,59 @@ describe("Claude permission mode decisions", () => {
       toolName: "Bash",
     })).toBe("allow");
   });
+
+  test("auto-allows Claude Code read-only built-in tools in plan mode", () => {
+    for (const toolName of [
+      "Read",
+      "Grep",
+      "Glob",
+      "LS",
+      "NotebookRead",
+      "WebFetch",
+      "WebSearch",
+      "BashOutput",
+      "TodoRead",
+    ]) {
+      expect(resolveClaudePermissionModeDecision({
+        permissionMode: "plan",
+        toolName,
+      })).toBe("allow");
+      expect(shouldAutoAllowClaudeTool({
+        permissionMode: "plan",
+        toolName,
+      })).toBe(true);
+    }
+  });
+
+  test("still prompts for read-only built-in tools outside plan/bypass modes", () => {
+    // In default mode the user explicitly asked to be consulted — Read should
+    // still prompt there.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "default",
+      toolName: "Read",
+    })).toBe("prompt");
+    // In acceptEdits/auto the read-only fast-path is intentionally not taken,
+    // because those modes only relax *mutating* tool approvals; this test pins
+    // the current behaviour so future relaxations are deliberate.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "acceptEdits",
+      toolName: "Read",
+    })).toBe("prompt");
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "auto",
+      toolName: "Read",
+    })).toBe("prompt");
+  });
+
+  test("still prompts for Bash in plan mode so command-level inspection runs", () => {
+    // Bash must keep going through the canUseTool prompt path in plan mode —
+    // the hard-deny check in shouldDenyClaudeToolInPlanMode inspects the
+    // command and we don't want to short-circuit that.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "plan",
+      toolName: "Bash",
+    })).toBe("prompt");
+  });
 });
 
 describe("buildClaudeSystemPrompt", () => {
