@@ -228,6 +228,7 @@ import {
   buildColiseumMergedFollowUp,
   buildReviewerPrompt,
   clearReviewerFromGroup,
+  collectActiveColiseumTaskIds,
   extractBranchSummary,
   planColiseumFanOut,
   planReviewerLaunch,
@@ -529,22 +530,21 @@ function mirrorReviewerVerdict(args: {
   const assistant = [...messages].reverse().find((m) => m.role === "assistant");
   const accumulatedText =
     assistant?.parts
-      .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+      .filter(
+        (p): p is Extract<typeof p, { type: "text" }> => p.type === "text",
+      )
       .map((p) => p.text)
       .join("") ?? "";
 
   const group =
     state.activeWorkspaceId === args.workspaceId
       ? state.activeColiseumsByTask[args.parentTaskId]
-      : state.workspaceRuntimeCacheById[args.workspaceId]?.activeColiseumsByTask[
-          args.parentTaskId
-        ];
+      : state.workspaceRuntimeCacheById[args.workspaceId]
+          ?.activeColiseumsByTask[args.parentTaskId];
   if (!group || !group.reviewerVerdict) return;
 
   // Detect lifecycle transitions by inspecting the events we just applied.
-  const sawError = args.pendingEvents.some(
-    (event) => event.type === "error",
-  );
+  const sawError = args.pendingEvents.some((event) => event.type === "error");
   const sawDone = args.pendingEvents.some((event) => event.type === "done");
 
   const nextStatus: ColiseumReviewerVerdict["status"] = sawError
@@ -1379,9 +1379,7 @@ interface AppState {
    * reviewer verdict plus branch summaries. This preserves user authorship:
    * no provider turn starts until the user sends the drafted follow-up.
    */
-  enqueueColiseumMergedFollowUp: (args: {
-    parentTaskId: string;
-  }) => void;
+  enqueueColiseumMergedFollowUp: (args: { parentTaskId: string }) => void;
   /**
    * Spawn an ephemeral reviewer task that compares branch outputs and streams
    * a verdict into `group.reviewerVerdict`. Only one reviewer runs at a time
@@ -1591,9 +1589,7 @@ function findUnreadApprovalNotificationIds(args: {
     }
 
     if (action.messageId) {
-      return action.messageId === args.messageId
-        ? [notification.id]
-        : [];
+      return action.messageId === args.messageId ? [notification.id] : [];
     }
 
     if (notification.taskId?.trim() !== args.taskId.trim()) {
@@ -1976,6 +1972,7 @@ function normalizeSharedSkillsHomeSetting(value?: string | null) {
 function getRetainedLoadedMessageTaskIds(args: {
   activeTaskId: string;
   activeTurnIdsByTask: Record<string, string | undefined>;
+  activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
 }) {
   const retained = new Set<string>();
   if (args.activeTaskId) {
@@ -1986,6 +1983,11 @@ function getRetainedLoadedMessageTaskIds(args: {
       retained.add(taskId);
     }
   }
+  for (const taskId of collectActiveColiseumTaskIds({
+    activeColiseumsByTask: args.activeColiseumsByTask,
+  })) {
+    retained.add(taskId);
+  }
   return retained;
 }
 
@@ -1993,10 +1995,12 @@ function compactLoadedMessagesByTask(args: {
   messagesByTask: Record<string, ChatMessage[]>;
   activeTaskId: string;
   activeTurnIdsByTask: Record<string, string | undefined>;
+  activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
 }) {
   const retained = getRetainedLoadedMessageTaskIds({
     activeTaskId: args.activeTaskId,
     activeTurnIdsByTask: args.activeTurnIdsByTask,
+    activeColiseumsByTask: args.activeColiseumsByTask,
   });
   let changed = false;
   const nextEntries = Object.entries(args.messagesByTask).filter(([taskId]) => {
@@ -5232,6 +5236,7 @@ export const useAppStore = create<AppState>()(
               messagesByTask: current.messagesByTask,
               activeTaskId: current.activeTaskId,
               activeTurnIdsByTask: current.activeTurnIdsByTask,
+              activeColiseumsByTask: current.activeColiseumsByTask,
             });
             if (compactedMessagesByTask === current.messagesByTask) {
               return current;
@@ -10562,7 +10567,8 @@ export const useAppStore = create<AppState>()(
             } satisfies StartColiseumResult;
           }
           const latestParentHistory =
-            latestWorkspaceSession.messagesByTask[parentTaskId] ?? parentHistory;
+            latestWorkspaceSession.messagesByTask[parentTaskId] ??
+            parentHistory;
           const latestParentTask =
             latestWorkspaceSession.tasks.find((t) => t.id === parentTaskId) ??
             parentTask;
@@ -10779,8 +10785,7 @@ export const useAppStore = create<AppState>()(
                     currentState.activeTurnIdsByTask[taskId] === turnId;
                   const nextTurnActivityByTask = turnStillActive
                     ? applyProviderTurnActivityEvents({
-                        activityByTask:
-                          currentState.providerTurnActivityByTask,
+                        activityByTask: currentState.providerTurnActivityByTask,
                         taskId,
                         turnId,
                         providerId: provider,
@@ -11540,9 +11545,7 @@ export const useAppStore = create<AppState>()(
           const branchAssistantText = (() => {
             // Final assistant text from the branch — same accumulator the
             // reviewer summary uses but scoped to this single branch.
-            const tail = branchMessages.slice(
-              group.parentMessageCountAtFanout,
-            );
+            const tail = branchMessages.slice(group.parentMessageCountAtFanout);
             const assistants = tail.filter((m) => m.role === "assistant");
             return assistants
               .flatMap((msg) =>
@@ -11587,7 +11590,11 @@ export const useAppStore = create<AppState>()(
           const state = get();
           const group = state.activeColiseumsByTask[parentTaskId];
           const reviewerVerdict = group?.reviewerVerdict;
-          if (!group || !reviewerVerdict || reviewerVerdict.status !== "complete") {
+          if (
+            !group ||
+            !reviewerVerdict ||
+            reviewerVerdict.status !== "complete"
+          ) {
             return;
           }
           const parentRuntimeTarget = resolveTaskRuntimeTarget({
@@ -11611,8 +11618,9 @@ export const useAppStore = create<AppState>()(
                 parentMessageCountAtFanout: group.parentMessageCountAtFanout,
               });
             })
-            .filter((summary): summary is NonNullable<typeof summary> =>
-              summary !== null
+            .filter(
+              (summary): summary is NonNullable<typeof summary> =>
+                summary !== null,
             );
           if (branchSummaries.length === 0) {
             return;
@@ -11663,8 +11671,7 @@ export const useAppStore = create<AppState>()(
           // Abort any prior reviewer cleanly before starting a new one — the
           // verdict card's "Re-run" button lands here.
           if (group.reviewerTaskId) {
-            const priorTurnId =
-              state.activeTurnIdsByTask[group.reviewerTaskId];
+            const priorTurnId = state.activeTurnIdsByTask[group.reviewerTaskId];
             const abortTurn = window.api?.provider?.abortTurn;
             if (priorTurnId && abortTurn) {
               void abortTurn({ turnId: priorTurnId });
@@ -11960,8 +11967,7 @@ export const useAppStore = create<AppState>()(
                 recentProjects: get().recentProjects,
               }),
             }),
-            onEvent: ({ event }) =>
-              reviewerEventController.handleEvent(event),
+            onEvent: ({ event }) => reviewerEventController.handleEvent(event),
           });
 
           return {
