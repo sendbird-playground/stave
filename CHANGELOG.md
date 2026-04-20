@@ -1,3 +1,13 @@
+## [0.4.3](https://github.com/sendbird-playground/stave/compare/v0.4.2...v0.4.3) (2026-04-20)
+
+### Highlights
+
+- restore chat message-list scrolling by making the message pane a flex column so the conversation surface can inherit the remaining height correctly
+
+### References
+
+- [#518](https://github.com/sendbird-playground/stave/pull/518)
+
 ## [0.4.2](https://github.com/sendbird-playground/stave/compare/v0.4.1...v0.4.2) (2026-04-20)
 
 ### Highlights
@@ -11,6 +21,7 @@
 - [#514](https://github.com/sendbird-playground/stave/pull/514)
 - [#515](https://github.com/sendbird-playground/stave/pull/515)
 - [#516](https://github.com/sendbird-playground/stave/pull/516)
+
 ## [0.4.1](https://github.com/sendbird-playground/stave/compare/v0.4.0...v0.4.1) (2026-04-20)
 
 ### Highlights
