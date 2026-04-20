@@ -10,20 +10,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button, Textarea, toast, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ModelIcon } from "@/components/ai-elements/model-icon";
+import { ProviderModelPicker } from "@/components/session/ProviderModelPicker";
 import {
   getDefaultModelForProvider,
-  getProviderLabel,
-  getSdkModelOptions,
   listProviderIds,
-  toHumanModelName,
 } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { cn } from "@/lib/utils";
@@ -264,9 +254,6 @@ export function ColiseumLauncherDialog(args: ColiseumLauncherDialogProps) {
 
         <div className="flex flex-col gap-3">
           {branches.map((branch, index) => {
-            const providerModels = getSdkModelOptions({
-              providerId: branch.provider,
-            });
             const providerAvailable =
               providerAvailability[branch.provider] !== false;
             return (
@@ -281,55 +268,19 @@ export function ColiseumLauncherDialog(args: ColiseumLauncherDialogProps) {
                   {index + 1}
                 </span>
 
-                <Select
-                  value={branch.provider}
-                  onValueChange={(value) =>
-                    updateBranchProvider(branch.id, value as ProviderId)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-[150px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providerIds.map((providerId) => (
-                      <SelectItem
-                        key={providerId}
-                        value={providerId}
-                        className="text-xs"
-                      >
-                        <span className="flex items-center gap-2">
-                          <ModelIcon
-                            providerId={providerId}
-                            className="size-3.5"
-                          />
-                          {getProviderLabel({ providerId, variant: "full" })}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={branch.model}
-                  onValueChange={(value) =>
-                    updateBranchModel(branch.id, value)
-                  }
-                >
-                  <SelectTrigger className="h-8 flex-1 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providerModels.map((model) => (
-                      <SelectItem
-                        key={model}
-                        value={model}
-                        className="text-xs"
-                      >
-                        {toHumanModelName({ model })}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-1 items-center gap-2">
+                  <ProviderModelPicker
+                    selectedProvider={branch.provider}
+                    selectedModel={branch.model}
+                    onProviderChange={(providerId) =>
+                      updateBranchProvider(branch.id, providerId)
+                    }
+                    onModelChange={(model) =>
+                      updateBranchModel(branch.id, model)
+                    }
+                    providerAvailable={providerAvailable}
+                  />
+                </div>
 
                 <Button
                   type="button"

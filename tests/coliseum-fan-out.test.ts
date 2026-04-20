@@ -2,12 +2,19 @@ import { describe, expect, test } from "bun:test";
 import {
   MAX_COLISEUM_BRANCHES,
   MIN_COLISEUM_BRANCHES,
+  buildReviewerPrompt,
+  clearReviewerFromGroup,
+  deriveColiseumRunStatus,
+  extractBranchSummary,
   planColiseumFanOut,
+  planReviewerLaunch,
   promoteColiseumChampion,
   reapColiseumOrphans,
   stripColiseumBranchesFromRecords,
+  unpickColiseumChampion,
   validateColiseumBranches,
   type ColiseumBranchSpec,
+  type ColiseumBranchSummary,
 } from "@/store/coliseum.utils";
 import { isColiseumBranch, getVisibleTasks } from "@/lib/tasks";
 import type {
@@ -112,13 +119,62 @@ describe("planColiseumFanOut", () => {
       content: "x",
       createTaskId: sequentialIdFactory("child"),
       createTurnId: sequentialIdFactory("turn"),
+      createRunId: sequentialIdFactory("run"),
       now: deterministicNow,
     });
 
     expect(result.group.parentTaskId).toBe("task-parent");
+    expect(result.group.runId).toBe("run-1");
     expect(result.group.branchTaskIds).toEqual(["child-1", "child-2"]);
     expect(result.group.parentMessageCountAtFanout).toBe(history.length);
     expect(result.group.createdAt).toBe("2026-04-20T12:00:00.000Z");
+    // Initial lifecycle flags — branches are live, no champion yet.
+    expect(result.group.status).toBe("running");
+    expect(result.group.championTaskId).toBeNull();
+    expect(result.group.pickedHistory).toEqual([]);
+    expect(result.group.viewMode).toBe("grid");
+    expect(result.group.focusedBranchTaskId).toBeNull();
+    expect(result.group.minimized).toBe(false);
+  });
+
+  test("captures authoritative per-branch provider/model in branchMeta", () => {
+    const result = planColiseumFanOut({
+      parentTask: createParentTask(),
+      parentMessages: createHistory(),
+      parentPromptDraft: undefined,
+      parentTaskWorkspaceId: "worktree:abc",
+      branches: [
+        { provider: "claude-code", model: "claude-sonnet-4-6" },
+        { provider: "codex", model: "gpt-5.4" },
+        { provider: "stave", model: "stave-auto" },
+      ],
+      content: "x",
+      createTaskId: sequentialIdFactory("child"),
+      createTurnId: sequentialIdFactory("turn"),
+      now: deterministicNow,
+    });
+
+    // branchMeta is keyed by branch task id and records the exact
+    // provider/model chosen at fan-out time. This is the source of truth for
+    // the arena column headers — we don't wait on the branch's first assistant
+    // message to render the model label.
+    expect(result.group.branchMeta).toEqual({
+      "child-1": {
+        branchTaskId: "child-1",
+        provider: "claude-code",
+        model: "claude-sonnet-4-6",
+      },
+      "child-2": {
+        branchTaskId: "child-2",
+        provider: "codex",
+        model: "gpt-5.4",
+      },
+      "child-3": {
+        branchTaskId: "child-3",
+        provider: "stave",
+        model: "stave-auto",
+      },
+    });
   });
 
   test("seeds each branch's message list with parent history + user msg + empty streaming assistant", () => {
@@ -464,9 +520,28 @@ describe("promoteColiseumChampion", () => {
   function buildGroup(): ColiseumGroupState {
     return {
       parentTaskId: "task-parent",
+      runId: "run-1",
       branchTaskIds: ["child-1", "child-2"],
+      branchMeta: {
+        "child-1": {
+          branchTaskId: "child-1",
+          provider: "claude-code",
+          model: "claude-sonnet-4-6",
+        },
+        "child-2": {
+          branchTaskId: "child-2",
+          provider: "codex",
+          model: "gpt-5.4",
+        },
+      },
       createdAt: "2026-04-20T12:00:00.000Z",
       parentMessageCountAtFanout: 2,
+      status: "running",
+      championTaskId: null,
+      pickedHistory: [],
+      viewMode: "grid",
+      focusedBranchTaskId: null,
+      minimized: false,
     };
   }
 
@@ -530,8 +605,110 @@ describe("promoteColiseumChampion", () => {
     expect(result.nextParentMessages[3]?.id).toBe("task-parent-m-4");
     expect(result.nextParentMessages[2]?.content).toBe("compare prompt");
     expect(result.nextParentMessages[3]?.content).toBe("champion answer");
-    // Branches including champion are queued for removal.
-    expect(result.branchTaskIdsToDrop).toEqual(["child-1", "child-2"]);
+  });
+
+  test("forces isStreaming:false on the grafted tail so parent doesn't render a stuck spinner", () => {
+    const group = buildGroup();
+    const parentMessages = createHistory();
+    // Champion with a still-streaming assistant — simulates "pick now" while
+    // the branch is mid-response.
+    const streamingChampion: ChatMessage[] = [
+      ...createHistory(),
+      {
+        id: "child-1-m-3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "compare prompt",
+        parts: [{ type: "text", text: "compare prompt" }],
+      },
+      {
+        id: "child-1-m-4",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "streaming...",
+        isStreaming: true,
+        parts: [{ type: "text", text: "streaming..." }],
+      },
+    ];
+
+    const result = promoteColiseumChampion({
+      group,
+      championTaskId: "child-1",
+      parentMessages,
+      championMessages: streamingChampion,
+    });
+
+    // The grafted assistant must be flagged as *not* streaming on the parent
+    // side, even though the original branch message is still streaming.
+    const graftedAssistant = result.nextParentMessages[3];
+    expect(graftedAssistant?.role).toBe("assistant");
+    expect(graftedAssistant?.isStreaming).toBe(false);
+  });
+
+  test("replacePreviousPick rolls back the previous graft before applying the new champion's tail", () => {
+    const group = buildGroup();
+    // Parent already has the previous champion's tail grafted onto it.
+    const parentAfterFirstPick: ChatMessage[] = [
+      ...createHistory(),
+      {
+        id: "task-parent-m-3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "compare prompt",
+        parts: [{ type: "text", text: "compare prompt" }],
+      },
+      {
+        id: "task-parent-m-4",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "previous pick answer",
+        parts: [{ type: "text", text: "previous pick answer" }],
+      },
+    ];
+
+    // New champion branch (child-2) has a different answer.
+    const newChampionMessages: ChatMessage[] = [
+      ...createHistory(),
+      {
+        id: "child-2-m-3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "compare prompt",
+        parts: [{ type: "text", text: "compare prompt" }],
+      },
+      {
+        id: "child-2-m-4",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "codex",
+        content: "new pick answer",
+        parts: [{ type: "text", text: "new pick answer" }],
+      },
+    ];
+
+    const result = promoteColiseumChampion({
+      group,
+      championTaskId: "child-2",
+      parentMessages: parentAfterFirstPick,
+      championMessages: newChampionMessages,
+      replacePreviousPick: true,
+    });
+
+    // Parent is rolled back to 2 history messages, then new tail (2) grafted.
+    expect(result.nextParentMessages).toHaveLength(4);
+    expect(result.appendedFromChampion).toBe(2);
+    // Grafted tail is the NEW champion's content, not the previous one.
+    expect(result.nextParentMessages[3]?.content).toBe("new pick answer");
+    expect(result.nextParentMessages[3]?.id).toBe("task-parent-m-4");
+    // Previous pick's content is gone.
+    expect(
+      result.nextParentMessages.some((m) => m.content === "previous pick answer"),
+    ).toBe(false);
   });
 
   test("does not mutate the input parent messages or champion messages", () => {
@@ -577,6 +754,156 @@ describe("promoteColiseumChampion", () => {
   });
 });
 
+describe("unpickColiseumChampion", () => {
+  function buildGroup(): ColiseumGroupState {
+    return {
+      parentTaskId: "task-parent",
+      runId: "run-1",
+      branchTaskIds: ["child-1", "child-2"],
+      branchMeta: {
+        "child-1": {
+          branchTaskId: "child-1",
+          provider: "claude-code",
+          model: "claude-sonnet-4-6",
+        },
+        "child-2": {
+          branchTaskId: "child-2",
+          provider: "codex",
+          model: "gpt-5.4",
+        },
+      },
+      createdAt: "2026-04-20T12:00:00.000Z",
+      parentMessageCountAtFanout: 2,
+      status: "promoted",
+      championTaskId: "child-1",
+      pickedHistory: [
+        { championTaskId: "child-1", pickedAt: "2026-04-20T12:01:00.000Z" },
+      ],
+      viewMode: "grid",
+      focusedBranchTaskId: null,
+      minimized: false,
+    };
+  }
+
+  test("rolls parent messages back to the pre-fan-out snapshot", () => {
+    const group = buildGroup();
+    const preFanOut = createHistory();
+    // Parent has been extended with the previous champion's graft.
+    const parentAfterGraft: ChatMessage[] = [
+      ...preFanOut,
+      {
+        id: "task-parent-m-3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "compare prompt",
+        parts: [{ type: "text", text: "compare prompt" }],
+      },
+      {
+        id: "task-parent-m-4",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "picked answer",
+        parts: [{ type: "text", text: "picked answer" }],
+      },
+    ];
+
+    const result = unpickColiseumChampion({
+      group,
+      parentMessages: parentAfterGraft,
+    });
+
+    // Exactly the first `parentMessageCountAtFanout` messages are preserved.
+    expect(result.nextParentMessages).toHaveLength(
+      group.parentMessageCountAtFanout,
+    );
+    expect(result.nextParentMessages[0]).toEqual(preFanOut[0]!);
+    expect(result.nextParentMessages[1]).toEqual(preFanOut[1]!);
+  });
+
+  test("does not mutate input parent messages", () => {
+    const group = buildGroup();
+    const parent = [...createHistory()];
+    const snapshot = JSON.parse(JSON.stringify(parent));
+
+    unpickColiseumChampion({ group, parentMessages: parent });
+
+    expect(parent).toEqual(snapshot);
+  });
+});
+
+describe("deriveColiseumRunStatus", () => {
+  function buildBaseGroup(): ColiseumGroupState {
+    return {
+      parentTaskId: "task-parent",
+      runId: "run-1",
+      branchTaskIds: ["child-1", "child-2"],
+      branchMeta: {
+        "child-1": {
+          branchTaskId: "child-1",
+          provider: "claude-code",
+          model: "claude-sonnet-4-6",
+        },
+        "child-2": {
+          branchTaskId: "child-2",
+          provider: "codex",
+          model: "gpt-5.4",
+        },
+      },
+      createdAt: "2026-04-20T12:00:00.000Z",
+      parentMessageCountAtFanout: 2,
+      status: "running",
+      championTaskId: null,
+      pickedHistory: [],
+      viewMode: "grid",
+      focusedBranchTaskId: null,
+      minimized: false,
+    };
+  }
+
+  test("returns 'running' when any branch has an active turn", () => {
+    const group = buildBaseGroup();
+    expect(
+      deriveColiseumRunStatus({
+        group,
+        activeTurnIdsByTask: { "child-1": "turn-1" },
+      }),
+    ).toBe("running");
+  });
+
+  test("returns 'ready' when no branch is active and no champion is picked", () => {
+    const group = buildBaseGroup();
+    expect(
+      deriveColiseumRunStatus({
+        group,
+        activeTurnIdsByTask: {},
+      }),
+    ).toBe("ready");
+  });
+
+  test("returns 'promoted' when no branch is active and a champion exists", () => {
+    const group = { ...buildBaseGroup(), championTaskId: "child-1" };
+    expect(
+      deriveColiseumRunStatus({
+        group,
+        activeTurnIdsByTask: {},
+      }),
+    ).toBe("promoted");
+  });
+
+  test("'running' takes precedence over a picked champion (pick-now mid-stream)", () => {
+    const group = { ...buildBaseGroup(), championTaskId: "child-1" };
+    expect(
+      deriveColiseumRunStatus({
+        group,
+        // The non-champion branch is still streaming.
+        activeTurnIdsByTask: { "child-2": "turn-2" },
+      }),
+    ).toBe("running");
+  });
+});
+
 describe("reapColiseumOrphans", () => {
   function makeTask(id: string, coliseumParentTaskId?: string): Task {
     return {
@@ -613,9 +940,28 @@ describe("reapColiseumOrphans", () => {
       activeColiseumsByTask: {
         parent: {
           parentTaskId: "parent",
+          runId: "run-parent-1",
           branchTaskIds: ["branch-a", "branch-b"],
+          branchMeta: {
+            "branch-a": {
+              branchTaskId: "branch-a",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+            "branch-b": {
+              branchTaskId: "branch-b",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+          },
           createdAt: "2026-04-20T00:00:00.000Z",
           parentMessageCountAtFanout: 0,
+          status: "running",
+          championTaskId: null,
+          pickedHistory: [],
+          viewMode: "grid",
+          focusedBranchTaskId: null,
+          minimized: false,
         },
       },
     });
@@ -643,9 +989,23 @@ describe("reapColiseumOrphans", () => {
       activeColiseumsByTask: {
         parent: {
           parentTaskId: "parent",
+          runId: "run-parent-1",
           branchTaskIds: ["live-branch"],
+          branchMeta: {
+            "live-branch": {
+              branchTaskId: "live-branch",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+          },
           createdAt: "2026-04-20T00:00:00.000Z",
           parentMessageCountAtFanout: 0,
+          status: "running",
+          championTaskId: null,
+          pickedHistory: [],
+          viewMode: "grid",
+          focusedBranchTaskId: null,
+          minimized: false,
         },
       },
     });
@@ -690,7 +1050,7 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     );
   });
 
-  test("promotion + record stripping produces a clean parent-only state", () => {
+  test("promotion is non-destructive: branches stay alive so the user can re-pick", () => {
     const plan = runFanOut();
 
     // Simulate the champion branch appending a response after fan-out.
@@ -719,39 +1079,243 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
 
     // Parent gained exactly the post-fan-out tail (user msg + assistant).
     expect(promotion.appendedFromChampion).toBe(2);
-    expect(promotion.branchTaskIdsToDrop.sort()).toEqual(
-      plan.branchDispatchList.map((d) => d.taskId).sort(),
-    );
+    expect(promotion.nextParentMessages).toHaveLength(parentMessages.length + 2);
+    // The grafted assistant renders as *complete* on the parent.
+    expect(
+      promotion.nextParentMessages.at(-1)?.isStreaming,
+    ).toBe(false);
+    // Non-destructive: the result does NOT include a drop list. Branches stay
+    // alive — the store lets the arena remain open so the user can re-pick,
+    // switch focus, or keep comparing. Explicit cleanup is handled by
+    // `discardColiseumRun`, not by promote.
+    expect(
+      (promotion as unknown as { branchTaskIdsToDrop?: unknown })
+        .branchTaskIdsToDrop,
+    ).toBeUndefined();
 
-    // Strip branch entries from downstream maps like the store does.
-    const messagesByTaskAfter = stripColiseumBranchesFromRecords(
-      {
-        "task-parent": parentMessages,
-        ...plan.branchMessagesByTask,
-      },
-      promotion.branchTaskIdsToDrop,
-    );
-    expect(Object.keys(messagesByTaskAfter)).toEqual(["task-parent"]);
-
-    const activeTurnsAfter = stripColiseumBranchesFromRecords(
-      { ...plan.branchActiveTurnIdsByTask },
-      promotion.branchTaskIdsToDrop,
-    );
-    expect(activeTurnsAfter).toEqual({});
-
-    // Reap any leftover branch task records — there should be no orphans
-    // because the store clears the group along with the branches.
+    // With the group still active, `reapColiseumOrphans` must preserve all
+    // branch tasks — promote is NOT a reap trigger.
     const reapResult = reapColiseumOrphans({
       tasks: plan.branchTasks,
-      activeColiseumsByTask: {},
+      activeColiseumsByTask: {
+        "task-parent": {
+          ...plan.group,
+          championTaskId,
+          status: "promoted",
+          pickedHistory: [
+            { championTaskId, pickedAt: "2026-04-20T12:01:00.000Z" },
+          ],
+        },
+      },
     });
-    expect(reapResult.tasks).toEqual([]);
-    expect(reapResult.orphanedBranchTaskIds.sort()).toEqual(
-      plan.branchTasks.map((t) => t.id).sort(),
-    );
+    expect(reapResult.tasks).toEqual(plan.branchTasks);
+    expect(reapResult.orphanedBranchTaskIds).toEqual([]);
   });
 
-  test("dismissing the arena without picking a champion also cleans up", () => {
+  test("re-pick replaces the previous graft while branches remain alive", () => {
+    const plan = runFanOut();
+
+    // First pick: branch 1.
+    const firstChampionId = plan.branchDispatchList[0]!.taskId;
+    const firstChampionPrior = plan.branchMessagesByTask[firstChampionId]!;
+    const firstChampionMessages: ChatMessage[] = firstChampionPrior.map(
+      (msg, idx) => {
+        if (idx === firstChampionPrior.length - 1 && msg.role === "assistant") {
+          return {
+            ...msg,
+            isStreaming: false,
+            content: "first champion answer",
+            parts: [{ type: "text", text: "first champion answer" }],
+          };
+        }
+        return msg;
+      },
+    );
+    const firstPick = promoteColiseumChampion({
+      group: plan.group,
+      championTaskId: firstChampionId,
+      parentMessages: createHistory(),
+      championMessages: firstChampionMessages,
+    });
+    expect(firstPick.nextParentMessages.at(-1)?.content).toBe(
+      "first champion answer",
+    );
+
+    // Second pick: branch 2, replacing the first.
+    const secondChampionId = plan.branchDispatchList[1]!.taskId;
+    const secondChampionPrior = plan.branchMessagesByTask[secondChampionId]!;
+    const secondChampionMessages: ChatMessage[] = secondChampionPrior.map(
+      (msg, idx) => {
+        if (idx === secondChampionPrior.length - 1 && msg.role === "assistant") {
+          return {
+            ...msg,
+            isStreaming: false,
+            content: "second champion answer",
+            parts: [{ type: "text", text: "second champion answer" }],
+          };
+        }
+        return msg;
+      },
+    );
+    const secondPick = promoteColiseumChampion({
+      group: plan.group,
+      championTaskId: secondChampionId,
+      parentMessages: firstPick.nextParentMessages,
+      championMessages: secondChampionMessages,
+      replacePreviousPick: true,
+    });
+
+    // The grafted tail reflects the *new* champion's content, length stays at
+    // history + 2 (not history + 4 — re-pick must not accumulate).
+    expect(secondPick.nextParentMessages).toHaveLength(
+      createHistory().length + 2,
+    );
+    expect(secondPick.nextParentMessages.at(-1)?.content).toBe(
+      "second champion answer",
+    );
+
+    // Branches are still alive; re-pick is a pure parent-side swap.
+    const reapResult = reapColiseumOrphans({
+      tasks: plan.branchTasks,
+      activeColiseumsByTask: {
+        "task-parent": {
+          ...plan.group,
+          championTaskId: secondChampionId,
+          status: "promoted",
+          pickedHistory: [
+            { championTaskId: firstChampionId, pickedAt: "2026-04-20T12:01:00.000Z" },
+            { championTaskId: secondChampionId, pickedAt: "2026-04-20T12:02:00.000Z" },
+          ],
+        },
+      },
+    });
+    expect(reapResult.tasks).toEqual(plan.branchTasks);
+  });
+
+  test("sequential runs: after close+relaunch, parent accumulates both champions' tails", () => {
+    // === Run 1 ===
+    const plan1 = planColiseumFanOut({
+      parentTask: createParentTask(),
+      parentMessages: createHistory(),
+      parentPromptDraft: undefined,
+      parentTaskWorkspaceId: "worktree:abc",
+      branches: [
+        { provider: "claude-code", model: "claude-sonnet-4-6" },
+        { provider: "codex", model: "gpt-5.4" },
+      ],
+      content: "first coliseum prompt",
+      createTaskId: sequentialIdFactory("run1-child"),
+      createTurnId: sequentialIdFactory("run1-turn"),
+      createRunId: sequentialIdFactory("run"),
+      now: deterministicNow,
+    });
+    expect(plan1.group.runId).toBe("run-1");
+
+    // Pick champion from run 1.
+    const champion1Id = plan1.branchDispatchList[0]!.taskId;
+    const champion1Messages: ChatMessage[] = plan1.branchMessagesByTask[
+      champion1Id
+    ]!.map((msg, idx, arr) => {
+      if (idx === arr.length - 1 && msg.role === "assistant") {
+        return {
+          ...msg,
+          isStreaming: false,
+          content: "run 1 champion answer",
+          parts: [{ type: "text", text: "run 1 champion answer" }],
+        };
+      }
+      return msg;
+    });
+    const pick1 = promoteColiseumChampion({
+      group: plan1.group,
+      championTaskId: champion1Id,
+      parentMessages: createHistory(),
+      championMessages: champion1Messages,
+    });
+
+    // Simulate close-arena: branches reaped, group removed from state.
+    const tasksAfterClose1 = reapColiseumOrphans({
+      tasks: plan1.branchTasks,
+      activeColiseumsByTask: {},
+    });
+    expect(tasksAfterClose1.tasks).toHaveLength(0);
+
+    // === Run 2 — starts from run 1's grafted parent messages ===
+    const plan2 = planColiseumFanOut({
+      parentTask: createParentTask(),
+      // Crucial: the new run reads the parent's *current* history, which
+      // already includes run 1's grafted tail.
+      parentMessages: pick1.nextParentMessages,
+      parentPromptDraft: undefined,
+      parentTaskWorkspaceId: "worktree:abc",
+      branches: [
+        { provider: "claude-code", model: "claude-opus-4-5" },
+        { provider: "stave", model: "stave-auto" },
+      ],
+      content: "second coliseum prompt",
+      createTaskId: sequentialIdFactory("run2-child"),
+      createTurnId: sequentialIdFactory("run2-turn"),
+      createRunId: sequentialIdFactory("r2-run"),
+      now: deterministicNow,
+    });
+
+    // Second run gets its own runId, and its fan-out point lands on the
+    // extended parent — not the original pre-run-1 length.
+    expect(plan2.group.runId).toBe("r2-run-1");
+    expect(plan2.group.parentMessageCountAtFanout).toBe(
+      pick1.nextParentMessages.length,
+    );
+
+    // Pick champion from run 2.
+    const champion2Id = plan2.branchDispatchList[1]!.taskId;
+    const champion2Messages: ChatMessage[] = plan2.branchMessagesByTask[
+      champion2Id
+    ]!.map((msg, idx, arr) => {
+      if (idx === arr.length - 1 && msg.role === "assistant") {
+        return {
+          ...msg,
+          isStreaming: false,
+          content: "run 2 champion answer",
+          parts: [{ type: "text", text: "run 2 champion answer" }],
+        };
+      }
+      return msg;
+    });
+    const pick2 = promoteColiseumChampion({
+      group: plan2.group,
+      championTaskId: champion2Id,
+      parentMessages: pick1.nextParentMessages,
+      championMessages: champion2Messages,
+    });
+
+    // Parent now carries history (2) + run 1 tail (2) + run 2 tail (2) = 6.
+    expect(pick2.nextParentMessages).toHaveLength(6);
+    // Run 1's champion answer is preserved (sequential, not destructive).
+    expect(
+      pick2.nextParentMessages.map((m) => m.content),
+    ).toEqual([
+      "first prompt",
+      "first answer",
+      "first coliseum prompt",
+      "run 1 champion answer",
+      "second coliseum prompt",
+      "run 2 champion answer",
+    ]);
+    // IDs are contiguous on the parent task.
+    expect(pick2.nextParentMessages.map((m) => m.id)).toEqual([
+      "task-parent-m-1",
+      "task-parent-m-2",
+      "task-parent-m-3",
+      "task-parent-m-4",
+      "task-parent-m-5",
+      "task-parent-m-6",
+    ]);
+    // Grafted assistants render as complete on the parent.
+    expect(pick2.nextParentMessages[3]?.isStreaming).toBe(false);
+    expect(pick2.nextParentMessages[5]?.isStreaming).toBe(false);
+  });
+
+  test("discarding the run without picking a champion cleans up every branch", () => {
     const plan = runFanOut();
     const strippedMessages = stripColiseumBranchesFromRecords(
       plan.branchMessagesByTask,
@@ -759,7 +1323,7 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     );
     expect(strippedMessages).toEqual({});
 
-    // Post-dismiss: branches must be reapable from the task list even if they
+    // Post-discard: branches must be reapable from the task list even if they
     // were never promoted.
     const reapResult = reapColiseumOrphans({
       tasks: plan.branchTasks,
@@ -772,6 +1336,7 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     const plan = runFanOut();
     const [killed, ...survivors] = plan.branchTasks;
     expect(killed).toBeDefined();
+    // Spread keeps all the required ColiseumGroupState fields from the plan.
     const reapResult = reapColiseumOrphans({
       tasks: plan.branchTasks,
       // The group now only tracks the surviving branches.
@@ -810,5 +1375,412 @@ describe("stripColiseumBranchesFromRecords", () => {
   test("returns the same reference when the branch list is empty", () => {
     const record = { a: 1 };
     expect(stripColiseumBranchesFromRecords(record, [])).toBe(record);
+  });
+});
+
+describe("extractBranchSummary", () => {
+  function meta(id: string): {
+    branchTaskId: string;
+    provider: "claude-code" | "codex" | "stave";
+    model: string;
+  } {
+    return {
+      branchTaskId: id,
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+    };
+  }
+
+  test("returns only the branch's post-fan-out messages, ignoring the parent prefix", () => {
+    const parentPrefix: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "unrelated",
+        parts: [{ type: "text", text: "unrelated" }],
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "unrelated answer",
+        parts: [{ type: "text", text: "unrelated answer" }],
+      },
+    ];
+    const branchTail: ChatMessage[] = [
+      {
+        id: "m3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "branch prompt",
+        parts: [{ type: "text", text: "branch prompt" }],
+      },
+      {
+        id: "m4",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "the answer",
+        parts: [{ type: "text", text: "the answer" }],
+      },
+    ];
+
+    const summary = extractBranchSummary({
+      branchMeta: meta("branch-1"),
+      branchMessages: [...parentPrefix, ...branchTail],
+      parentMessageCountAtFanout: parentPrefix.length,
+    });
+
+    expect(summary.branchTaskId).toBe("branch-1");
+    expect(summary.assistantText).toBe("the answer");
+    // Parent-prefix assistant text is NOT included.
+    expect(summary.assistantText).not.toContain("unrelated");
+    expect(summary.isStreaming).toBe(false);
+  });
+
+  test("collects file paths from code_diff and Edit/Write tool_use parts, deduped and ordered", () => {
+    const branchTail: ChatMessage[] = [
+      {
+        id: "m3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "prompt",
+        parts: [{ type: "text", text: "prompt" }],
+      },
+      {
+        id: "m4",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "",
+        parts: [
+          {
+            type: "tool_use",
+            toolName: "Edit",
+            input: JSON.stringify({ file_path: "src/a.ts" }),
+            state: "output-available",
+          },
+          {
+            type: "code_diff",
+            filePath: "src/b.ts",
+            oldContent: "",
+            newContent: "new",
+            status: "pending",
+          },
+          {
+            type: "tool_use",
+            toolName: "Write",
+            input: JSON.stringify({ file_path: "src/a.ts" }),
+            state: "output-available",
+          },
+          {
+            type: "text",
+            text: "done",
+          },
+        ],
+      },
+    ];
+
+    const summary = extractBranchSummary({
+      branchMeta: meta("branch-1"),
+      branchMessages: branchTail,
+      parentMessageCountAtFanout: 0,
+    });
+
+    // Deduped (src/a.ts appears twice in tool uses; only listed once).
+    expect(summary.changedFilePaths).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(summary.toolTrace).toEqual([
+      "Edit: src/a.ts",
+      "Write: src/a.ts",
+    ]);
+    expect(summary.assistantText).toBe("done");
+  });
+
+  test("caps toolTrace length to keep the reviewer prompt bounded", () => {
+    const manyTools = Array.from({ length: 20 }, (_, i) => ({
+      type: "tool_use" as const,
+      toolName: "Bash",
+      input: JSON.stringify({ cmd: `echo ${i}` }),
+      state: "output-available" as const,
+    }));
+    const summary = extractBranchSummary({
+      branchMeta: meta("branch-1"),
+      branchMessages: [
+        {
+          id: "m1",
+          role: "assistant",
+          model: "m",
+          providerId: "claude-code",
+          content: "",
+          parts: manyTools,
+        },
+      ],
+      parentMessageCountAtFanout: 0,
+    });
+    // REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH is 12.
+    expect(summary.toolTrace.length).toBe(12);
+  });
+
+  test("flags isStreaming when the final assistant is still streaming", () => {
+    const summary = extractBranchSummary({
+      branchMeta: meta("branch-1"),
+      branchMessages: [
+        {
+          id: "m1",
+          role: "assistant",
+          model: "m",
+          providerId: "claude-code",
+          content: "partial",
+          isStreaming: true,
+          parts: [{ type: "text", text: "partial" }],
+        },
+      ],
+      parentMessageCountAtFanout: 0,
+    });
+    expect(summary.isStreaming).toBe(true);
+  });
+});
+
+describe("buildReviewerPrompt", () => {
+  const sampleSummaries: ColiseumBranchSummary[] = [
+    {
+      branchTaskId: "branch-1",
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+      assistantText: "Here is approach A.",
+      changedFilePaths: ["src/a.ts"],
+      toolTrace: ["Edit: src/a.ts"],
+      isStreaming: false,
+    },
+    {
+      branchTaskId: "branch-2",
+      provider: "codex",
+      model: "gpt-5.4",
+      assistantText: "Alternative approach B.",
+      changedFilePaths: ["src/b.ts", "README.md"],
+      toolTrace: ["Write: src/b.ts", "Bash"],
+      isStreaming: false,
+    },
+  ];
+
+  test("includes the original user prompt and each branch's model + text", () => {
+    const prompt = buildReviewerPrompt({
+      originalUserPrompt: "Refactor foo.",
+      branchSummaries: sampleSummaries,
+    });
+
+    expect(prompt).toContain("Refactor foo.");
+    expect(prompt).toContain("claude-code · claude-sonnet-4-6");
+    expect(prompt).toContain("codex · gpt-5.4");
+    expect(prompt).toContain("Here is approach A.");
+    expect(prompt).toContain("Alternative approach B.");
+    expect(prompt).toContain("src/a.ts");
+    expect(prompt).toContain("src/b.ts");
+    expect(prompt).toContain("README.md");
+  });
+
+  test("numbers branches 1..N in the order provided", () => {
+    const prompt = buildReviewerPrompt({
+      originalUserPrompt: "x",
+      branchSummaries: sampleSummaries,
+    });
+    const branch1Index = prompt.indexOf("Branch 1");
+    const branch2Index = prompt.indexOf("Branch 2");
+    expect(branch1Index).toBeGreaterThanOrEqual(0);
+    expect(branch2Index).toBeGreaterThan(branch1Index);
+  });
+
+  test("asks for a structured scorecard + recommendation in the response format", () => {
+    const prompt = buildReviewerPrompt({
+      originalUserPrompt: "x",
+      branchSummaries: sampleSummaries,
+    });
+    expect(prompt).toContain("TL;DR recommendation");
+    expect(prompt).toContain("Scorecard");
+    expect(prompt).toContain("Key differences");
+    expect(prompt).toContain("Red flags");
+  });
+
+  test("marks streaming branches so the reviewer knows the answer isn't final", () => {
+    const prompt = buildReviewerPrompt({
+      originalUserPrompt: "x",
+      branchSummaries: [
+        { ...sampleSummaries[0]!, isStreaming: true },
+      ],
+    });
+    expect(prompt).toContain("still streaming when captured");
+  });
+
+  test("truncates very long assistant text with a visible marker", () => {
+    const big = "A".repeat(5000);
+    const prompt = buildReviewerPrompt({
+      originalUserPrompt: "x",
+      branchSummaries: [{ ...sampleSummaries[0]!, assistantText: big }],
+    });
+    expect(prompt).toContain("truncated");
+    // Full 5000-char block should not appear — it would exceed the 4000 cap.
+    expect(prompt).not.toContain("A".repeat(4500));
+  });
+
+  test("falls back to a placeholder when the branch has no text (tool-only response)", () => {
+    const prompt = buildReviewerPrompt({
+      originalUserPrompt: "x",
+      branchSummaries: [{ ...sampleSummaries[0]!, assistantText: "" }],
+    });
+    expect(prompt).toContain("(no text — tool-only response)");
+  });
+
+  test("throws when no branch summaries are provided", () => {
+    expect(() =>
+      buildReviewerPrompt({ originalUserPrompt: "x", branchSummaries: [] }),
+    ).toThrow(/at least one branch/);
+  });
+});
+
+describe("planReviewerLaunch", () => {
+  function buildGroupFixture(): ColiseumGroupState {
+    return {
+      parentTaskId: "task-parent",
+      runId: "run-xyz",
+      branchTaskIds: ["branch-a", "branch-b"],
+      branchMeta: {
+        "branch-a": {
+          branchTaskId: "branch-a",
+          provider: "claude-code",
+          model: "claude-sonnet",
+        },
+        "branch-b": {
+          branchTaskId: "branch-b",
+          provider: "codex",
+          model: "gpt-5",
+        },
+      },
+      createdAt: "2026-04-20T00:00:00.000Z",
+      parentMessageCountAtFanout: 2,
+      status: "ready",
+      championTaskId: null,
+      pickedHistory: [],
+      viewMode: "grid",
+      focusedBranchTaskId: null,
+      minimized: false,
+    };
+  }
+
+  test("seeds a reviewer task hidden via coliseumParentTaskId and assigns message ids", () => {
+    const parentTask = createParentTask();
+    const group = buildGroupFixture();
+
+    const plan = planReviewerLaunch({
+      parentTask,
+      group,
+      parentTaskWorkspaceId: "ws-main",
+      reviewerProvider: "claude-code",
+      reviewerModel: "claude-opus-4.5",
+      reviewerPrompt: "compare the branches",
+      createTaskId: () => "reviewer-task-1",
+      createTurnId: () => "turn-rev-1",
+      now: () => "2026-04-20T01:00:00.000Z",
+    });
+
+    expect(plan.reviewerTask.id).toBe("reviewer-task-1");
+    expect(plan.reviewerTask.coliseumParentTaskId).toBe("task-parent");
+    expect(plan.reviewerTurnId).toBe("turn-rev-1");
+    expect(plan.reviewerMessages).toHaveLength(2);
+    expect(plan.reviewerMessages[0]).toMatchObject({
+      role: "user",
+      content: "compare the branches",
+    });
+    expect(plan.reviewerMessages[1]).toMatchObject({
+      role: "assistant",
+      providerId: "claude-code",
+      model: "claude-opus-4.5",
+      isStreaming: true,
+    });
+    expect(plan.reviewerVerdict).toMatchObject({
+      status: "running",
+      providerId: "claude-code",
+      model: "claude-opus-4.5",
+      content: "",
+    });
+    expect(plan.nextGroup.reviewerTaskId).toBe("reviewer-task-1");
+    expect(plan.nextGroup.reviewerVerdict).toBe(plan.reviewerVerdict);
+  });
+
+  test("reviewer is considered a branch by isColiseumBranch — task tree hides it", () => {
+    const parentTask = createParentTask();
+    const group = buildGroupFixture();
+    const plan = planReviewerLaunch({
+      parentTask,
+      group,
+      parentTaskWorkspaceId: "ws-main",
+      reviewerProvider: "codex",
+      reviewerModel: "gpt-5",
+      reviewerPrompt: "review",
+      createTaskId: () => "rev",
+      createTurnId: () => "turn",
+    });
+    expect(isColiseumBranch(plan.reviewerTask)).toBe(true);
+  });
+
+  test("inherits parent prompt-draft runtime overrides and overrides model", () => {
+    const parentTask = createParentTask();
+    const group = buildGroupFixture();
+    const parentPromptDraft: PromptDraft = {
+      text: "",
+      attachedFilePaths: [],
+      attachments: [],
+      runtimeOverrides: {
+        claudePermissionMode: "acceptEdits",
+        model: "some-other-model",
+      },
+    };
+
+    const plan = planReviewerLaunch({
+      parentTask,
+      group,
+      parentTaskWorkspaceId: "ws-main",
+      reviewerProvider: "claude-code",
+      reviewerModel: "claude-opus-4.5",
+      reviewerPrompt: "review",
+      parentPromptDraft,
+      createTaskId: () => "r",
+      createTurnId: () => "t",
+    });
+    expect(plan.reviewerPromptDraft.runtimeOverrides).toEqual({
+      claudePermissionMode: "acceptEdits",
+      model: "claude-opus-4.5",
+    });
+  });
+
+  test("clearReviewerFromGroup drops reviewerTaskId and verdict cleanly", () => {
+    const parentTask = createParentTask();
+    const plan = planReviewerLaunch({
+      parentTask,
+      group: buildGroupFixture(),
+      parentTaskWorkspaceId: "ws-main",
+      reviewerProvider: "claude-code",
+      reviewerModel: "claude-opus-4.5",
+      reviewerPrompt: "p",
+      createTaskId: () => "r",
+      createTurnId: () => "t",
+    });
+    const cleared = clearReviewerFromGroup(plan.nextGroup);
+    expect(cleared.reviewerTaskId).toBeUndefined();
+    expect(cleared.reviewerVerdict).toBeUndefined();
+    // Preserves other fields.
+    expect(cleared.branchTaskIds).toEqual(plan.nextGroup.branchTaskIds);
+    expect(cleared.parentMessageCountAtFanout).toBe(
+      plan.nextGroup.parentMessageCountAtFanout,
+    );
+  });
+
+  test("clearReviewerFromGroup returns the same reference when nothing to clear", () => {
+    const group = buildGroupFixture();
+    expect(clearReviewerFromGroup(group)).toBe(group);
   });
 });

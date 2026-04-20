@@ -1,15 +1,47 @@
-import { Crown, Swords, Trophy, X } from "lucide-react";
-import { Fragment, memo, useMemo } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Crown,
+  Focus,
+  Gavel,
+  LayoutGrid,
+  Maximize2,
+  Minimize2,
+  Minus,
+  PlusCircle,
+  Swords,
+  Trash2,
+  Trophy,
+  Undo2,
+  X,
+} from "lucide-react";
+import { Fragment, memo, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   Badge,
   Button,
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   WaveIndicator,
 } from "@/components/ui";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Message, MessageContent, ModelIcon } from "@/components/ai-elements";
 import { AssistantMessageBody } from "@/components/session/message/assistant-trace";
+import { ColiseumReviewerCard } from "@/components/session/ColiseumReviewerCard";
+import { ColiseumReviewerDialog } from "@/components/session/ColiseumReviewerDialog";
 import {
   getProviderLabel,
   getProviderWaveToneClass,
@@ -18,21 +50,28 @@ import {
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import type { ChatMessage } from "@/types/chat";
-import { useShallow } from "zustand/react/shallow";
+import type {
+  ChatMessage,
+  ColiseumBranchMeta,
+  ColiseumGroupState,
+} from "@/types/chat";
 
 /**
- * Coliseum arena — horizontal N-column split view rendering one branch task
- * per column. Shown in place of the single `ChatPanel` when the active task
- * has a live Coliseum group.
+ * Coliseum arena — the multi-model comparison surface.
  *
- * Design notes:
- * - Reuses `AssistantMessageBody` (which already accepts a `taskId` prop) so
- *   each column renders the full assistant trace experience without forcing
- *   us to refactor the global `ChatPanel` (which reads `activeTaskId` directly
- *   from the store).
- * - Minimal UI on purpose — no virtualization, no scroll memory, no plan
- *   viewer. Branches are ephemeral; richness belongs to the promoted parent.
+ * Key UX goals (v2):
+ * - Models are clearly identified from the start (header reads from
+ *   `group.branchMeta`, not the first assistant message which streams in
+ *   lazily).
+ * - Parent conversation is hidden by default; only the branch's own turn is
+ *   shown so side-by-side comparison is easy.
+ * - Each branch shows a per-branch file-change summary so the user can tell
+ *   what each model actually did.
+ * - Pick is non-destructive — branches stay alive so the user can re-pick,
+ *   compare further, or discard explicitly.
+ * - A grid/focus toggle lets the user zoom into a single branch without
+ *   losing the others, and a minimize button steps out to the chat without
+ *   destroying anything.
  */
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -44,77 +83,541 @@ interface ColiseumArenaPanelProps {
 export const ColiseumArenaPanel = memo(ColiseumArenaPanelImpl);
 
 function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
-  const group = useAppStore(
-    (state) => state.activeColiseumsByTask[args.parentTaskId],
+  const [
+    group,
+    branchTurnState,
+    championTaskId,
+    hasReviewerVerdict,
+    reviewerRunning,
+    reviewerDefaultProvider,
+    reviewerDefaultModel,
+    pickColiseumChampion,
+    unpickColiseumChampion,
+    setColiseumViewMode,
+    minimizeColiseum,
+    discardColiseumRun,
+    enqueueParentFollowUp,
+  ] = useAppStore(
+    useShallow((state) => {
+      const grp = state.activeColiseumsByTask[args.parentTaskId];
+      const turnState: Record<string, boolean> = {};
+      if (grp) {
+        for (const branchId of grp.branchTaskIds) {
+          turnState[branchId] = Boolean(state.activeTurnIdsByTask[branchId]);
+        }
+      }
+      // Seed reviewer defaults from the parent task so the picker opens to a
+      // sensible starting provider/model without the user having to re-pick.
+      const parentTask = state.tasks.find((t) => t.id === args.parentTaskId);
+      const parentDraft = state.promptDraftByTask[args.parentTaskId];
+      const reviewerProvider: ProviderId =
+        (parentTask?.provider as ProviderId | undefined) ?? "claude-code";
+      const reviewerModel =
+        parentDraft?.runtimeOverrides?.model ?? "";
+      return [
+        grp,
+        turnState,
+        grp?.championTaskId ?? null,
+        Boolean(grp?.reviewerVerdict),
+        grp?.reviewerVerdict?.status === "running",
+        reviewerProvider,
+        reviewerModel,
+        state.pickColiseumChampion,
+        state.unpickColiseumChampion,
+        state.setColiseumViewMode,
+        state.minimizeColiseum,
+        state.discardColiseumRun,
+        state.enqueueColiseumIncorporateFollowUp,
+      ] as const;
+    }),
   );
-  const dismissColiseum = useAppStore((state) => state.dismissColiseum);
+
+  const [reviewerDialogOpen, setReviewerDialogOpen] = useState(false);
 
   if (!group) {
-    // Defensive: caller checks this first; render nothing rather than
-    // crashing if parent task id / group wiring ever get out of sync.
     return null;
   }
 
+  const totalBranches = group.branchTaskIds.length;
+  const runningBranches = group.branchTaskIds.filter(
+    (branchId) => branchTurnState[branchId],
+  ).length;
+  const completedBranches = totalBranches - runningBranches;
+  const anyComplete = completedBranches > 0;
+  const allComplete = runningBranches === 0;
+
+  const viewMode = group.viewMode;
+  const focusedBranchId =
+    viewMode === "focus"
+      ? (group.focusedBranchTaskId ??
+        group.championTaskId ??
+        group.branchTaskIds[0] ??
+        null)
+      : null;
+
+  const headerStatusLabel = allComplete
+    ? championTaskId
+      ? "Champion picked"
+      : "All branches complete"
+    : `${completedBranches}/${totalBranches} complete · ${runningBranches} running`;
+
+  // "Review & compare" is disabled while branches are still streaming — the
+  // reviewer needs final outputs to produce a useful verdict. Re-run is
+  // allowed once a verdict exists even when branches add more content.
+  const canLaunchReviewer = anyComplete && !reviewerRunning;
+  const reviewerDialogReRun = hasReviewerVerdict;
+
+  // Branches available as "Also incorporate from…" targets — everything that
+  // isn't the champion and has produced at least one assistant message is a
+  // candidate. Filtering here keeps the dropdown lean.
+  const incorporateCandidates = group.branchTaskIds.filter(
+    (branchId) => branchId !== championTaskId,
+  );
+
+  const handleToggleView = () => {
+    setColiseumViewMode({
+      parentTaskId: args.parentTaskId,
+      viewMode: viewMode === "grid" ? "focus" : "grid",
+    });
+  };
+
+  // "Exit" = close + discard merged into one status-aware action so the user
+  // can start a follow-up Coliseum on the same task immediately afterwards.
+  //
+  // Three distinct UX states:
+  // - `championTaskId` set → "Close arena" (non-destructive). The champion's
+  //   answer is already grafted onto the parent, so closing is lossless. No
+  //   confirm — one click commits the run and unblocks the launcher.
+  // - No champion, but branches are still running → "Discard run" with
+  //   confirm that flags the abort cost.
+  // - No champion, all branches ready → "Discard run" with a softer confirm;
+  //   none of the branches' work has been committed yet.
+  const isClose = Boolean(championTaskId);
+  const handleExit = () => {
+    if (!isClose) {
+      const confirmMessage =
+        runningBranches > 0
+          ? `Discard Coliseum? ${runningBranches} branch(es) are still running and will be aborted.`
+          : `Discard Coliseum? No champion was picked — every branch will be dropped.`;
+      const ok = window.confirm(confirmMessage);
+      if (!ok) return;
+    }
+    discardColiseumRun({ parentTaskId: args.parentTaskId });
+  };
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
-      <header className="flex h-10 shrink-0 items-center justify-between border-b border-border/80 bg-card px-3 text-sm">
+      <header className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-card px-3 text-sm">
         <div className="flex min-w-0 items-center gap-2">
           <Swords className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate font-medium text-foreground">
-            Coliseum — {group.branchTaskIds.length} entrants
+            Coliseum · {totalBranches} entrants
           </span>
           <Badge
             variant="secondary"
             className="shrink-0 rounded-sm text-[10px] uppercase tracking-[0.14em]"
           >
-            Parallel
+            {championTaskId ? "Promoted" : runningBranches > 0 ? "Running" : "Ready"}
           </Badge>
           <span className="shrink-0 text-xs text-muted-foreground">
-            Pick a champion to keep its answer in this task.
+            {headerStatusLabel}
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 rounded-sm px-2 text-xs shadow-none"
-            onClick={() =>
-              dismissColiseum({ parentTaskId: args.parentTaskId })
-            }
-          >
-            Dismiss
-          </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none"
+                  onClick={handleToggleView}
+                  aria-pressed={viewMode === "focus"}
+                >
+                  {viewMode === "grid" ? (
+                    <>
+                      <Focus className="size-3.5" /> Focus
+                    </>
+                  ) : (
+                    <>
+                      <LayoutGrid className="size-3.5" /> Grid
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {viewMode === "grid"
+                  ? "Focus on one branch at a time. Others collapse into a rail."
+                  : "Back to the grid — all branches side-by-side."}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {championTaskId ? (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none"
+                    onClick={() =>
+                      unpickColiseumChampion({ parentTaskId: args.parentTaskId })
+                    }
+                  >
+                    <Undo2 className="size-3.5" />
+                    Unpick
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Roll the parent conversation back to pre-fan-out so you can
+                  re-pick a different branch.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+          {championTaskId && incorporateCandidates.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none"
+                >
+                  <PlusCircle className="size-3.5" />
+                  Also incorporate
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  Incorporate from…
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {incorporateCandidates.map((branchId) => {
+                  const meta = group.branchMeta[branchId];
+                  return (
+                    <DropdownMenuItem
+                      key={branchId}
+                      onClick={() =>
+                        enqueueParentFollowUp({
+                          parentTaskId: args.parentTaskId,
+                          branchTaskId: branchId,
+                        })
+                      }
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <ModelIcon
+                        providerId={meta?.provider ?? "stave"}
+                        model={meta?.model}
+                        className="size-3.5"
+                      />
+                      <span className="flex-1 truncate">
+                        {displayBranchName(meta)}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none"
+                  disabled={!canLaunchReviewer}
+                  onClick={() => setReviewerDialogOpen(true)}
+                >
+                  <Gavel className="size-3.5" />
+                  {hasReviewerVerdict ? "Re-run review" : "Review & compare"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {!anyComplete
+                  ? "Waiting for at least one branch to finish before review."
+                  : reviewerRunning
+                    ? "Reviewer is already comparing. Wait for it to finish before re-running."
+                    : "Launch a reviewer model that compares every branch's answer and produces a verdict."}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none"
+                  onClick={() =>
+                    minimizeColiseum({ parentTaskId: args.parentTaskId })
+                  }
+                >
+                  <Minus className="size-3.5" />
+                  Minimize
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                Return to chat without ending the Coliseum. Branches keep
+                running; you can reopen the arena from the pill above the
+                composer.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={isClose ? "default" : "ghost"}
+                  className={cn(
+                    "h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none",
+                    !isClose && "text-destructive hover:text-destructive",
+                  )}
+                  onClick={handleExit}
+                >
+                  {isClose ? (
+                    <>
+                      <Check className="size-3.5" />
+                      Close arena
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="size-3.5" />
+                      Discard run
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {isClose
+                  ? "Commit the champion's answer and close the arena. You can start a new Coliseum on this task right after."
+                  : "Drop every branch and the arena. Nothing has been grafted onto the parent conversation, so this cannot be undone."}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </header>
-      <div className="min-h-0 flex-1">
-        <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-          {group.branchTaskIds.map((branchTaskId, index) => {
-            const isLast = index === group.branchTaskIds.length - 1;
-            return (
-              <Fragment key={branchTaskId}>
-                <ResizablePanel
-                  defaultSize={100 / group.branchTaskIds.length}
-                  minSize={15}
-                  className="flex min-w-0 flex-col"
-                >
-                  <ColiseumBranchColumn
-                    parentTaskId={args.parentTaskId}
-                    branchTaskId={branchTaskId}
-                    index={index}
-                    totalBranches={group.branchTaskIds.length}
-                  />
-                </ResizablePanel>
-                {!isLast ? (
-                  <ResizableHandle
-                    withHandle={false}
-                    className="bg-border/80"
-                  />
+
+      {hasReviewerVerdict ? (
+        <div className="shrink-0 border-b border-border/60 px-3 pt-3">
+          <ColiseumReviewerCard
+            parentTaskId={args.parentTaskId}
+            onRequestReRun={() => setReviewerDialogOpen(true)}
+          />
+        </div>
+      ) : null}
+
+      {viewMode === "focus" && focusedBranchId ? (
+        <ArenaFocusLayout
+          parentTaskId={args.parentTaskId}
+          focusedBranchId={focusedBranchId}
+          group={group}
+          branchTurnState={branchTurnState}
+          anyComplete={anyComplete}
+          allComplete={allComplete}
+          championTaskId={championTaskId}
+          onPick={(branchId) =>
+            pickColiseumChampion({
+              parentTaskId: args.parentTaskId,
+              championTaskId: branchId,
+            })
+          }
+          onFocus={(branchId) =>
+            setColiseumViewMode({
+              parentTaskId: args.parentTaskId,
+              viewMode: "focus",
+              focusedBranchTaskId: branchId,
+            })
+          }
+        />
+      ) : (
+        <ArenaGridLayout
+          parentTaskId={args.parentTaskId}
+          group={group}
+          branchTurnState={branchTurnState}
+          anyComplete={anyComplete}
+          allComplete={allComplete}
+          championTaskId={championTaskId}
+          onPick={(branchId) =>
+            pickColiseumChampion({
+              parentTaskId: args.parentTaskId,
+              championTaskId: branchId,
+            })
+          }
+          onFocus={(branchId) =>
+            setColiseumViewMode({
+              parentTaskId: args.parentTaskId,
+              viewMode: "focus",
+              focusedBranchTaskId: branchId,
+            })
+          }
+        />
+      )}
+      <ColiseumReviewerDialog
+        parentTaskId={args.parentTaskId}
+        open={reviewerDialogOpen}
+        onOpenChange={setReviewerDialogOpen}
+        defaultProvider={reviewerDefaultProvider}
+        defaultModel={reviewerDefaultModel || undefined}
+        isReRun={reviewerDialogReRun}
+      />
+    </div>
+  );
+}
+
+interface ArenaLayoutProps {
+  parentTaskId: string;
+  group: ColiseumGroupState;
+  branchTurnState: Record<string, boolean>;
+  anyComplete: boolean;
+  allComplete: boolean;
+  championTaskId: string | null;
+  onPick: (branchId: string) => void;
+  onFocus: (branchId: string) => void;
+}
+
+function ArenaGridLayout(props: ArenaLayoutProps) {
+  const {
+    parentTaskId,
+    group,
+    branchTurnState,
+    anyComplete,
+    allComplete,
+    championTaskId,
+    onPick,
+    onFocus,
+  } = props;
+  return (
+    <div className="min-h-0 flex-1">
+      <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+        {group.branchTaskIds.map((branchTaskId, index) => {
+          const isLast = index === group.branchTaskIds.length - 1;
+          return (
+            <Fragment key={branchTaskId}>
+              <ResizablePanel
+                defaultSize={100 / group.branchTaskIds.length}
+                minSize={15}
+                className="flex min-w-0 flex-col"
+              >
+                <ColiseumBranchColumn
+                  parentTaskId={parentTaskId}
+                  branchTaskId={branchTaskId}
+                  branchMeta={group.branchMeta[branchTaskId]}
+                  index={index}
+                  totalBranches={group.branchTaskIds.length}
+                  parentMessageCountAtFanout={group.parentMessageCountAtFanout}
+                  isRunning={branchTurnState[branchTaskId] ?? false}
+                  isChampion={championTaskId === branchTaskId}
+                  anyBranchComplete={anyComplete}
+                  allBranchesComplete={allComplete}
+                  onPick={() => onPick(branchTaskId)}
+                  onFocus={() => onFocus(branchTaskId)}
+                />
+              </ResizablePanel>
+              {!isLast ? (
+                <ResizableHandle withHandle={false} className="bg-border/80" />
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </ResizablePanelGroup>
+    </div>
+  );
+}
+
+function ArenaFocusLayout(
+  props: ArenaLayoutProps & { focusedBranchId: string },
+) {
+  const {
+    parentTaskId,
+    group,
+    branchTurnState,
+    anyComplete,
+    allComplete,
+    championTaskId,
+    onPick,
+    onFocus,
+    focusedBranchId,
+  } = props;
+  const focusedIndex = group.branchTaskIds.indexOf(focusedBranchId);
+  const otherBranchIds = group.branchTaskIds.filter(
+    (id) => id !== focusedBranchId,
+  );
+  return (
+    <div className="flex min-h-0 flex-1">
+      {/* Rail of non-focused branches on the left. */}
+      <aside className="flex w-48 shrink-0 flex-col gap-1.5 overflow-y-auto border-r border-border/70 bg-muted/20 p-2">
+        <div className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Other branches
+        </div>
+        {otherBranchIds.map((branchId, i) => {
+          const meta = group.branchMeta[branchId];
+          const running = branchTurnState[branchId] ?? false;
+          const isChamp = championTaskId === branchId;
+          const idx = group.branchTaskIds.indexOf(branchId);
+          return (
+            <button
+              key={branchId}
+              type="button"
+              onClick={() => onFocus(branchId)}
+              className={cn(
+                "flex flex-col gap-0.5 rounded-md border border-border/60 bg-background/70 px-2 py-1.5 text-left text-xs transition hover:border-primary/50 hover:bg-background",
+                isChamp && "border-primary/60",
+              )}
+            >
+              <div className="flex items-center gap-1.5">
+                <ModelIcon
+                  providerId={meta?.provider ?? "stave"}
+                  model={meta?.model}
+                  className="size-3"
+                />
+                <span className="min-w-0 truncate font-medium text-foreground">
+                  {displayBranchName(meta)}
+                </span>
+                {isChamp ? (
+                  <Crown className="size-3 shrink-0 text-amber-500" />
                 ) : null}
-              </Fragment>
-            );
-          })}
-        </ResizablePanelGroup>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span>#{idx + 1}</span>
+                {running ? (
+                  <>
+                    <span>·</span>
+                    <span className="text-primary">streaming</span>
+                  </>
+                ) : (
+                  <>
+                    <span>·</span>
+                    <span>done</span>
+                  </>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </aside>
+      <div className="min-w-0 flex-1">
+        <ColiseumBranchColumn
+          parentTaskId={parentTaskId}
+          branchTaskId={focusedBranchId}
+          branchMeta={group.branchMeta[focusedBranchId]}
+          index={focusedIndex >= 0 ? focusedIndex : 0}
+          totalBranches={group.branchTaskIds.length}
+          parentMessageCountAtFanout={group.parentMessageCountAtFanout}
+          isRunning={branchTurnState[focusedBranchId] ?? false}
+          isChampion={championTaskId === focusedBranchId}
+          anyBranchComplete={anyComplete}
+          allBranchesComplete={allComplete}
+          onPick={() => onPick(focusedBranchId)}
+          onFocus={() => onFocus(focusedBranchId)}
+        />
       </div>
     </div>
   );
@@ -123,61 +626,77 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
 interface ColiseumBranchColumnProps {
   parentTaskId: string;
   branchTaskId: string;
+  branchMeta: ColiseumBranchMeta | undefined;
   index: number;
   totalBranches: number;
+  parentMessageCountAtFanout: number;
+  isRunning: boolean;
+  isChampion: boolean;
+  anyBranchComplete: boolean;
+  allBranchesComplete: boolean;
+  onPick: () => void;
+  onFocus: () => void;
 }
 
 function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
   const [
-    branchTask,
     messages,
-    activeTurnId,
     chatStreamingEnabled,
     showInterimMessages,
-    pickColiseumChampion,
     closeColiseumBranch,
   ] = useAppStore(
     useShallow((state) => {
-      const branchTask = state.tasks.find(
-        (task) => task.id === args.branchTaskId,
-      );
       return [
-        branchTask ?? null,
         state.messagesByTask[args.branchTaskId] ?? EMPTY_MESSAGES,
-        state.activeTurnIdsByTask[args.branchTaskId],
         state.settings.chatStreamingEnabled,
         state.settings.showInterimMessages,
-        state.pickColiseumChampion,
         state.closeColiseumBranch,
       ] as const;
     }),
   );
 
-  const assistantMessages = useMemo(
-    () => messages.filter((msg) => msg.role === "assistant"),
-    [messages],
-  );
-  // The column header reflects the branch's *configured* provider/model. The
-  // branch `Task` record is the source of truth for provider; the first
-  // assistant message carries the model slug we streamed under. Fall back to
-  // empty so the header still renders while the turn is still warming up.
-  const firstAssistant = assistantMessages.at(0);
-  const headerProvider: ProviderId = branchTask?.provider ?? "stave";
-  const headerModel = firstAssistant?.model ?? "";
-  const isStreaming = Boolean(activeTurnId);
-  const canPromote = !isStreaming || assistantMessages.some((m) => !m.isStreaming);
+  const [priorOpen, setPriorOpen] = useState(false);
+  const [fileChangesOpen, setFileChangesOpen] = useState(false);
 
-  // Find the first user message at the fan-out boundary to display prompt in
-  // the header; branches all share the same prompt so we could render it once
-  // but showing per-column keeps each column self-contained.
-  const promptMessage = useMemo(
-    () => messages.find((msg) => msg.role === "user"),
-    [messages],
+  // Header provider/model comes from the authoritative `branchMeta` record
+  // (seeded at fan-out), not from the first assistant message. Falls back to
+  // the provider label only if metadata is somehow missing.
+  const headerProvider: ProviderId = args.branchMeta?.provider ?? "stave";
+  const headerModel = args.branchMeta?.model ?? "";
+
+  const priorMessages = useMemo(
+    () => messages.slice(0, args.parentMessageCountAtFanout),
+    [messages, args.parentMessageCountAtFanout],
   );
+  const branchMessages = useMemo(
+    () => messages.slice(args.parentMessageCountAtFanout),
+    [messages, args.parentMessageCountAtFanout],
+  );
+  const branchUser = useMemo(
+    () => branchMessages.find((msg) => msg.role === "user"),
+    [branchMessages],
+  );
+  const branchAssistants = useMemo(
+    () => branchMessages.filter((msg) => msg.role === "assistant"),
+    [branchMessages],
+  );
+  const hasAnyCompletedAssistant = branchAssistants.some((m) => !m.isStreaming);
+  const canPromote = hasAnyCompletedAssistant || !args.isRunning;
+
+  const fileChanges = useMemo(
+    () => extractBranchFileChanges(branchMessages),
+    [branchMessages],
+  );
+
+  const statusLabel = args.isRunning
+    ? "Streaming…"
+    : branchAssistants.length === 0
+      ? "Queued"
+      : "Complete";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 flex-col gap-1 border-b border-border/60 bg-card/80 px-3 py-2 text-xs">
+      <header className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 bg-card/80 px-3 py-2 text-xs">
         <div className="flex min-w-0 items-center gap-2">
           <ModelIcon
             providerId={headerProvider}
@@ -192,7 +711,10 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
                   variant: "full",
                 })}
           </span>
-          {isStreaming ? (
+          <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            {getProviderLabel({ providerId: headerProvider, variant: "short" })}
+          </span>
+          {args.isRunning ? (
             <WaveIndicator
               className={cn(
                 "size-3",
@@ -204,63 +726,183 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
               animate
             />
           ) : null}
+          {args.isChampion ? (
+            <Badge
+              variant="secondary"
+              className="shrink-0 gap-1 rounded-sm border-amber-500/40 bg-amber-500/15 text-[10px] uppercase tracking-[0.14em] text-amber-600"
+            >
+              <Crown className="size-3" />
+              Current
+            </Badge>
+          ) : null}
           <span className="ml-auto shrink-0 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             {args.index + 1} / {args.totalBranches}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="default"
-            className="h-7 flex-1 gap-1.5 rounded-sm px-2 text-xs shadow-none"
-            disabled={!canPromote}
-            onClick={() =>
-              pickColiseumChampion({
-                parentTaskId: args.parentTaskId,
-                championTaskId: args.branchTaskId,
-              })
-            }
-          >
-            <Crown className="size-3.5" />
-            Pick champion
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Close this branch"
-            title="Close this branch"
-            onClick={() =>
-              closeColiseumBranch({ branchTaskId: args.branchTaskId })
-            }
-          >
-            <X className="size-3.5" />
-          </Button>
+        <div className="flex items-center gap-1.5">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={args.isChampion ? "outline" : "default"}
+                  className="h-7 flex-1 gap-1.5 rounded-sm px-2 text-xs shadow-none"
+                  disabled={!canPromote || args.isChampion}
+                  onClick={args.onPick}
+                >
+                  <Crown className="size-3.5" />
+                  {args.isChampion
+                    ? "Current champion"
+                    : !args.anyBranchComplete
+                      ? "Waiting for a response…"
+                      : args.allBranchesComplete
+                        ? "Pick champion"
+                        : "Pick now (others still running)"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {args.isChampion
+                  ? "This branch is already the champion. Use Unpick in the header to re-pick."
+                  : "Promote this branch's answer into the main conversation. Branches stay alive so you can re-pick at any time."}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Focus this branch"
+                  onClick={args.onFocus}
+                >
+                  <Maximize2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                Focus on this branch. Others collapse into a rail.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Close this branch"
+                  onClick={() =>
+                    closeColiseumBranch({ branchTaskId: args.branchTaskId })
+                  }
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                Close this branch. The remaining branches continue.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        {promptMessage ? (
+        {priorMessages.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setPriorOpen((v) => !v)}
+            className="mb-2 flex w-full items-center gap-1.5 rounded-md border border-dashed border-border/60 px-2 py-1 text-left text-[11px] text-muted-foreground transition hover:border-border hover:bg-muted/40"
+          >
+            {priorOpen ? (
+              <ChevronDown className="size-3" />
+            ) : (
+              <ChevronRight className="size-3" />
+            )}
+            <span>
+              Prior conversation · {priorMessages.length} message
+              {priorMessages.length === 1 ? "" : "s"}
+            </span>
+            <span className="ml-auto text-[10px] uppercase tracking-[0.14em]">
+              {priorOpen ? "Hide" : "Show"}
+            </span>
+          </button>
+        ) : null}
+        {priorOpen ? (
+          <div className="mb-3 flex flex-col gap-2 rounded-md border border-border/60 bg-muted/30 p-2 text-xs">
+            {priorMessages.map((msg) => (
+              <div key={msg.id} className="flex flex-col gap-1">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {msg.role === "user" ? "You" : "Assistant"}
+                </div>
+                <div className="whitespace-pre-wrap break-words text-foreground/90">
+                  {msg.content || "(empty)"}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {branchUser ? (
           <div className="mb-3 rounded-md border border-border/60 bg-muted/40 px-2.5 py-2 text-xs text-foreground">
             <div className="mb-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               Prompt
             </div>
             <div className="whitespace-pre-wrap break-words">
-              {promptMessage.content || "(empty)"}
+              {branchUser.content || "(empty)"}
             </div>
           </div>
         ) : null}
-        {assistantMessages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+
+        {fileChanges.length > 0 ? (
+          <div className="mb-3 rounded-md border border-border/60 bg-muted/20 text-xs">
+            <button
+              type="button"
+              onClick={() => setFileChangesOpen((v) => !v)}
+              className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left"
+            >
+              {fileChangesOpen ? (
+                <ChevronDown className="size-3" />
+              ) : (
+                <ChevronRight className="size-3" />
+              )}
+              <span className="font-medium text-foreground">
+                File changes · {fileChanges.length}
+              </span>
+              <span className="ml-auto text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {fileChangesOpen ? "Hide" : "Show"}
+              </span>
+            </button>
+            {fileChangesOpen ? (
+              <ul className="flex flex-col gap-0.5 border-t border-border/50 px-2.5 py-1.5 text-[11px] text-foreground/80">
+                {fileChanges.map((fc) => (
+                  <li
+                    key={fc.filePath}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate font-mono">{fc.filePath}</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      {fc.actions.join(", ")} · {fc.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {branchAssistants.length === 0 ? (
+          <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <Trophy className="size-3.5" />
-              Waiting for response…
+              {args.isRunning ? "Waiting for response…" : "No response yet"}
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {assistantMessages.map((message) => (
+            {branchAssistants.map((message) => (
               <Message key={message.id} from="assistant">
                 <div className="flex w-full max-w-none flex-col gap-1.5">
                   <MessageContent>
@@ -279,6 +921,84 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
           </div>
         )}
       </div>
+
+      <footer className="flex shrink-0 items-center gap-2 border-t border-border/60 bg-card/70 px-3 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+        <Minimize2 className="size-3" />
+        <span>{statusLabel}</span>
+      </footer>
     </div>
   );
+}
+
+function displayBranchName(meta: ColiseumBranchMeta | undefined): string {
+  if (!meta) return "Branch";
+  if (meta.model) return toHumanModelName({ model: meta.model });
+  return getProviderLabel({ providerId: meta.provider, variant: "full" });
+}
+
+interface BranchFileChange {
+  filePath: string;
+  actions: string[];
+  count: number;
+}
+
+/**
+ * Extract a deduped list of files touched by a branch by scanning tool_use and
+ * code_diff parts. Returns one entry per unique file path; `actions` collects
+ * the tool names observed (Edit, Write, NotebookEdit, …) and `count` is the
+ * number of occurrences — useful as a rough "activity" signal.
+ */
+function extractBranchFileChanges(
+  messages: ChatMessage[],
+): BranchFileChange[] {
+  const byPath = new Map<string, { actions: Set<string>; count: number }>();
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    for (const part of message.parts) {
+      if (part.type === "code_diff") {
+        const entry = byPath.get(part.filePath) ?? {
+          actions: new Set<string>(),
+          count: 0,
+        };
+        entry.actions.add("diff");
+        entry.count += 1;
+        byPath.set(part.filePath, entry);
+        continue;
+      }
+      if (part.type === "tool_use") {
+        const filePath = extractFilePathFromToolInput(part.input);
+        if (!filePath) continue;
+        const entry = byPath.get(filePath) ?? {
+          actions: new Set<string>(),
+          count: 0,
+        };
+        entry.actions.add(part.toolName);
+        entry.count += 1;
+        byPath.set(filePath, entry);
+      }
+    }
+  }
+  return Array.from(byPath.entries())
+    .map(([filePath, { actions, count }]) => ({
+      filePath,
+      actions: Array.from(actions),
+      count,
+    }))
+    .sort((a, b) => a.filePath.localeCompare(b.filePath));
+}
+
+function extractFilePathFromToolInput(raw: string): string | null {
+  // Tool inputs are stored as JSON strings. We only care about the common
+  // write-tool shapes; anything else silently skips. Parse defensively — a
+  // malformed input should not crash the arena.
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed.file_path === "string") return parsed.file_path;
+    if (typeof parsed.filePath === "string") return parsed.filePath;
+    if (typeof parsed.notebook_path === "string") return parsed.notebook_path;
+    if (typeof parsed.path === "string") return parsed.path;
+  } catch {
+    // Streaming inputs may be partial JSON; ignore.
+  }
+  return null;
 }
