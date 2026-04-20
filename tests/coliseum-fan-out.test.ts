@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildColiseumMergedFollowUp,
   MAX_COLISEUM_BRANCHES,
   MIN_COLISEUM_BRANCHES,
   buildReviewerPrompt,
@@ -10,6 +11,7 @@ import {
   planReviewerLaunch,
   promoteColiseumChampion,
   reapColiseumOrphans,
+  summarizeColiseumActivity,
   stripColiseumBranchesFromRecords,
   unpickColiseumChampion,
   validateColiseumBranches,
@@ -1352,6 +1354,99 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
   });
 });
 
+describe("summarizeColiseumActivity", () => {
+  test("counts running branches and reviewers across active arenas", () => {
+    const summary = summarizeColiseumActivity({
+      activeColiseumsByTask: {
+        "task-parent": {
+          parentTaskId: "task-parent",
+          runId: "run-1",
+          branchTaskIds: ["branch-a", "branch-b"],
+          branchMeta: {
+            "branch-a": {
+              branchTaskId: "branch-a",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+            "branch-b": {
+              branchTaskId: "branch-b",
+              provider: "codex",
+              model: "gpt-5.4",
+            },
+          },
+          createdAt: "2026-04-20T12:00:00.000Z",
+          parentMessageCountAtFanout: 2,
+          status: "running",
+          championTaskId: null,
+          pickedHistory: [],
+          viewMode: "grid",
+          focusedBranchTaskId: null,
+          minimized: true,
+          reviewerTaskId: "reviewer-1",
+          reviewerVerdict: {
+            status: "running",
+            providerId: "claude-code",
+            model: "claude-opus",
+            content: "",
+            startedAt: "2026-04-20T12:01:00.000Z",
+          },
+        },
+      },
+      activeTurnIdsByTask: {
+        "branch-a": "turn-a",
+        "reviewer-1": "turn-reviewer",
+      },
+    });
+
+    expect(summary).toEqual({
+      runningArenaCount: 1,
+      runningBranchCount: 1,
+      runningReviewerCount: 1,
+      hasActivity: true,
+    });
+  });
+
+  test("returns an empty summary when every arena is idle", () => {
+    const summary = summarizeColiseumActivity({
+      activeColiseumsByTask: {
+        "task-parent": {
+          parentTaskId: "task-parent",
+          runId: "run-1",
+          branchTaskIds: ["branch-a", "branch-b"],
+          branchMeta: {
+            "branch-a": {
+              branchTaskId: "branch-a",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+            "branch-b": {
+              branchTaskId: "branch-b",
+              provider: "codex",
+              model: "gpt-5.4",
+            },
+          },
+          createdAt: "2026-04-20T12:00:00.000Z",
+          parentMessageCountAtFanout: 2,
+          status: "ready",
+          championTaskId: null,
+          pickedHistory: [],
+          viewMode: "grid",
+          focusedBranchTaskId: null,
+          minimized: false,
+        },
+      },
+      activeTurnIdsByTask: {},
+    });
+
+    expect(summary).toEqual({
+      runningArenaCount: 0,
+      runningBranchCount: 0,
+      runningReviewerCount: 0,
+      hasActivity: false,
+    });
+  });
+});
+
 describe("stripColiseumBranchesFromRecords", () => {
   test("removes listed keys and preserves the rest", () => {
     const record = {
@@ -1522,8 +1617,8 @@ describe("extractBranchSummary", () => {
       ],
       parentMessageCountAtFanout: 0,
     });
-    // REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH is 12.
-    expect(summary.toolTrace.length).toBe(12);
+    // REVIEWER_TOOL_TRACE_LIMIT_PER_BRANCH is 6.
+    expect(summary.toolTrace.length).toBe(6);
   });
 
   test("flags isStreaming when the final assistant is still streaming", () => {
@@ -1638,6 +1733,81 @@ describe("buildReviewerPrompt", () => {
   test("throws when no branch summaries are provided", () => {
     expect(() =>
       buildReviewerPrompt({ originalUserPrompt: "x", branchSummaries: [] }),
+    ).toThrow(/at least one branch/);
+  });
+});
+
+describe("buildColiseumMergedFollowUp", () => {
+  const sampleSummaries: ColiseumBranchSummary[] = [
+    {
+      branchTaskId: "branch-1",
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+      assistantText: "Champion answer.",
+      changedFilePaths: ["src/a.ts"],
+      toolTrace: ["Edit: src/a.ts"],
+      isStreaming: false,
+    },
+    {
+      branchTaskId: "branch-2",
+      provider: "codex",
+      model: "gpt-5.4",
+      assistantText: "Alternative improvement.",
+      changedFilePaths: ["src/b.ts"],
+      toolTrace: ["Write: src/b.ts"],
+      isStreaming: false,
+    },
+  ];
+
+  test("uses the reviewer verdict and excludes the champion body when a champion exists", () => {
+    const prompt = buildColiseumMergedFollowUp({
+      reviewerVerdict: { content: "Branch 2 has the better edge-case handling." },
+      branchSummaries: sampleSummaries,
+      championTaskId: "branch-1",
+    });
+
+    expect(prompt).toContain("Current champion already in the conversation");
+    expect(prompt).toContain("Branch 2 has the better edge-case handling.");
+    expect(prompt).toContain("Alternative improvement.");
+    expect(prompt).not.toContain("Champion answer.");
+  });
+
+  test("includes every branch when no champion has been picked", () => {
+    const prompt = buildColiseumMergedFollowUp({
+      reviewerVerdict: { content: "Prefer the first branch as the base." },
+      branchSummaries: sampleSummaries,
+      championTaskId: null,
+    });
+
+    expect(prompt).toContain("No champion has been picked yet.");
+    expect(prompt).toContain("Champion answer.");
+    expect(prompt).toContain("Alternative improvement.");
+  });
+
+  test("marks still-streaming branches and truncates oversized content", () => {
+    const prompt = buildColiseumMergedFollowUp({
+      reviewerVerdict: { content: "Use branch 1." },
+      branchSummaries: [
+        {
+          ...sampleSummaries[0]!,
+          assistantText: "A".repeat(3000),
+          isStreaming: true,
+        },
+      ],
+      championTaskId: null,
+    });
+
+    expect(prompt).toContain("still streaming when captured");
+    expect(prompt).toContain("truncated");
+    expect(prompt).not.toContain("A".repeat(2500));
+  });
+
+  test("throws when no branch summaries are provided", () => {
+    expect(() =>
+      buildColiseumMergedFollowUp({
+        reviewerVerdict: { content: "x" },
+        branchSummaries: [],
+      }),
     ).toThrow(/at least one branch/);
   });
 });

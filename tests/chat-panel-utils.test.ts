@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getLatestRenderableAssistantMessage,
   getReasoningTraceExpansionMode,
   getVisibleMessageParts,
   getLatestUserMessageId,
   getMessageBodyFallbackState,
   getMessageScrollFingerprint,
   getRenderableMessageParts,
+  hasRenderableMessageBody,
   groupMessageParts,
   hasVisibleMessagePartContent,
   isCodeDiffSummarySystemEvent,
@@ -41,6 +43,68 @@ describe("getRenderableMessageParts", () => {
       content: "Ignored content",
       parts: [{ type: "text", text: "Structured part" }],
     })).toEqual([{ type: "text", text: "Structured part" }]);
+  });
+});
+
+describe("hasRenderableMessageBody", () => {
+  test("treats tool-only completed turns as renderable content", () => {
+    expect(hasRenderableMessageBody({
+      content: "",
+      isStreaming: false,
+      parts: [{ type: "tool_use", toolName: "bash", input: "ls", output: "file.txt", state: "output-available" }],
+    })).toBe(true);
+  });
+
+  test("treats truly empty completed turns as non-renderable", () => {
+    expect(hasRenderableMessageBody({
+      content: "",
+      isStreaming: false,
+      parts: [],
+    })).toBe(false);
+  });
+});
+
+describe("getLatestRenderableAssistantMessage", () => {
+  test("returns the latest completed assistant with visible content", () => {
+    const latest = getLatestRenderableAssistantMessage([
+      { role: "assistant", content: "", isStreaming: false, parts: [] },
+      { role: "assistant", content: "final answer", isStreaming: false, parts: [] },
+    ]);
+
+    expect(latest).toEqual({
+      role: "assistant",
+      content: "final answer",
+      isStreaming: false,
+      parts: [],
+    });
+  });
+
+  test("falls back to the latest streaming assistant when no renderable assistant exists yet", () => {
+    const latest = getLatestRenderableAssistantMessage([
+      { role: "assistant", content: "", isStreaming: false, parts: [] },
+      { role: "assistant", content: "", isStreaming: true, parts: [] },
+    ]);
+
+    expect(latest).toEqual({
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+      parts: [],
+    });
+  });
+
+  test("ignores user messages while scanning for the latest assistant", () => {
+    const latest = getLatestRenderableAssistantMessage([
+      { role: "assistant", content: "branch answer", isStreaming: false, parts: [] },
+      { role: "user", content: "follow-up", isStreaming: false, parts: [{ type: "text", text: "follow-up" }] },
+    ]);
+
+    expect(latest).toEqual({
+      role: "assistant",
+      content: "branch answer",
+      isStreaming: false,
+      parts: [],
+    });
   });
 });
 

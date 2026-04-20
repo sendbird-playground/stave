@@ -1,5 +1,5 @@
 import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
-import { Swords } from "lucide-react";
+import { LoaderCircle, Swords } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -952,8 +952,25 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
         (task) => task.id === state.activeTaskId && !isTaskArchived(task),
       ) ?? null,
   );
-  const activeColiseum = useAppStore(
-    (state) => state.activeColiseumsByTask[state.activeTaskId] ?? null,
+  const [activeColiseum, activeColiseumRunningBranches, activeColiseumReviewerRunning] = useAppStore(
+    useShallow((state) => {
+      const group = state.activeColiseumsByTask[state.activeTaskId] ?? null;
+      const runningBranches = group
+        ? group.branchTaskIds.reduce(
+            (count, branchTaskId) =>
+              count + (state.activeTurnIdsByTask[branchTaskId] ? 1 : 0),
+            0,
+          )
+        : 0;
+      const reviewerRunning = Boolean(
+        group
+        && (
+          (group.reviewerTaskId && state.activeTurnIdsByTask[group.reviewerTaskId])
+          || group.reviewerVerdict?.status === "running"
+        ),
+      );
+      return [group, runningBranches, reviewerRunning] as const;
+    }),
   );
   const draftProvider = useAppStore((state) => state.draftProvider);
   const activeProvider = activeTask?.provider ?? draftProvider;
@@ -1162,6 +1179,8 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     }
 
     if (activeColiseum?.minimized) {
+      const coliseumBusy =
+        activeColiseumRunningBranches > 0 || activeColiseumReviewerRunning;
       return (
         <Button
           type="button"
@@ -1173,9 +1192,17 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           )}
           onClick={() => restoreColiseum({ parentTaskId: activeTaskId })}
           aria-label="Reopen Coliseum arena"
-          title="Reopen the paused Coliseum arena"
+          title={
+            coliseumBusy
+              ? "Reopen the running Coliseum arena"
+              : "Reopen the paused Coliseum arena"
+          }
         >
-          <Swords className="size-3.5" />
+          {coliseumBusy ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : (
+            <Swords className="size-3.5" />
+          )}
           <span>Reopen arena</span>
         </Button>
       );
@@ -1216,6 +1243,8 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     );
   }, [
     activeColiseum?.minimized,
+    activeColiseumReviewerRunning,
+    activeColiseumRunningBranches,
     activeModel,
     activeProvider,
     activeTask,

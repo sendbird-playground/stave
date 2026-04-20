@@ -27,6 +27,7 @@ import {
   Plus,
   RefreshCw,
   Settings,
+  Swords,
 } from "lucide-react";
 import {
   memo,
@@ -82,8 +83,9 @@ import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { summarizeColiseumActivity } from "@/store/coliseum.utils";
 import { isDefaultWorkspaceName } from "@/store/project.utils";
-import type { ChatMessage, Task } from "@/types/chat";
+import type { ChatMessage, ColiseumGroupState, Task } from "@/types/chat";
 
 type ProjectSidebarView = ProjectSidebarCollapsedProjectView;
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -91,6 +93,10 @@ const EMPTY_TASKS: Task[] = [];
 const EMPTY_MESSAGES_BY_TASK: Record<string, ChatMessage[]> = {};
 const EMPTY_MESSAGE_COUNT_BY_TASK: Record<string, number> = {};
 const EMPTY_ACTIVE_TURN_IDS_BY_TASK: Record<string, string | undefined> = {};
+const EMPTY_ACTIVE_COLISEUMS_BY_TASK: Record<
+  string,
+  ColiseumGroupState | undefined
+> = {};
 
 function resolveRespondingToneClass(args: {
   tasks: ReturnType<typeof useAppStore.getState>["tasks"];
@@ -165,6 +171,7 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
     tasks,
     messagesByTask,
     activeTurnIdsByTask,
+    activeColiseumsByTask,
     providerTurnActivityByTask,
     prStatus,
   ] = useAppStore(
@@ -174,19 +181,21 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
           state.tasks,
           state.messagesByTask,
           state.activeTurnIdsByTask,
+          state.activeColiseumsByTask,
           state.providerTurnActivityByTask,
           state.workspacePrInfoById[workspaceId]?.derived ?? null,
         ] as const;
       }
       const runtimeState = state.workspaceRuntimeCacheById[workspaceId];
-      return [
-        runtimeState?.tasks ?? EMPTY_TASKS,
-        runtimeState?.messagesByTask ?? EMPTY_MESSAGES_BY_TASK,
-        runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
-        state.providerTurnActivityByTask,
-        state.workspacePrInfoById[workspaceId]?.derived ?? null,
-      ] as const;
-    }),
+        return [
+          runtimeState?.tasks ?? EMPTY_TASKS,
+          runtimeState?.messagesByTask ?? EMPTY_MESSAGES_BY_TASK,
+          runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
+          runtimeState?.activeColiseumsByTask ?? EMPTY_ACTIVE_COLISEUMS_BY_TASK,
+          state.providerTurnActivityByTask,
+          state.workspacePrInfoById[workspaceId]?.derived ?? null,
+        ] as const;
+      }),
   );
 
   return useMemo(
@@ -197,9 +206,14 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
         activeTurnIdsByTask,
         providerTurnActivityByTask,
       }),
+      hasColiseumActivity: summarizeColiseumActivity({
+        activeColiseumsByTask,
+        activeTurnIdsByTask,
+      }).hasActivity,
       prStatus,
     }),
     [
+      activeColiseumsByTask,
       activeTurnIdsByTask,
       messagesByTask,
       prStatus,
@@ -401,13 +415,17 @@ const WorkspaceLeadingStatusIcon = memo(
     isDefault: boolean;
     busy: boolean;
   }) {
-    const { respondingTaskCount, respondingToneClass, prStatus } =
+    const { respondingTaskCount, respondingToneClass, hasColiseumActivity, prStatus } =
       useWorkspaceSidebarActivityState(args.workspaceId);
 
     if (args.busy) {
       return (
         <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
       );
+    }
+
+    if (hasColiseumActivity) {
+      return <Swords className="size-4 animate-pulse text-primary" />;
     }
 
     if (respondingTaskCount > 0) {
