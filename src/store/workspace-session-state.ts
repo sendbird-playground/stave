@@ -15,7 +15,11 @@ import { isTaskArchived, normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
 import { interruptPendingToolInteractionsInMessages } from "@/store/provider-message.utils";
-import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
+import {
+  reapColiseumOrphans,
+  stripColiseumBranchesFromRecords,
+} from "@/store/coliseum.utils";
+import type { ChatMessage, ColiseumGroupState, EditorTab, PromptDraft, Task } from "@/types/chat";
 
 export const starterWorkspaceId = "base";
 export const defaultWorkspaceName = "Default Workspace";
@@ -40,6 +44,13 @@ export interface WorkspaceSessionState {
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   nativeSessionReadyByTask: Record<string, boolean>;
+  /**
+   * Runtime-only state for in-flight Coliseums (multi-model parallel turns),
+   * keyed by the parent task id. Not persisted — branches are ephemeral child
+   * tasks and orphaned branches are reaped on workspace bootstrap if their
+   * parent's group is gone.
+   */
+  activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
 }
 
 export function createEmptyWorkspaceState() {
@@ -358,14 +369,30 @@ export function buildWorkspaceSessionState(args: {
   appendInterruptedNotices?: boolean;
 }): WorkspaceSessionState {
   const empty = createEmptyWorkspaceState();
-  const tasks = (args.snapshot?.tasks ?? empty.tasks).map(normalizeTaskControl);
-  const providerSessionByTask = args.snapshot?.providerSessionByTask ?? empty.providerSessionByTask;
-  const messagesByTask = args.appendInterruptedNotices
+  const rawTasks = (args.snapshot?.tasks ?? empty.tasks).map(normalizeTaskControl);
+  // Coliseum branch tasks are runtime-only — if any survived the snapshot
+  // (process crash mid-contest), drop them here since there's no live group
+  // state on bootstrap.
+  const { tasks, orphanedBranchTaskIds } = reapColiseumOrphans({
+    tasks: rawTasks,
+    activeColiseumsByTask: {},
+  });
+  const rawProviderSessionByTask =
+    args.snapshot?.providerSessionByTask ?? empty.providerSessionByTask;
+  const providerSessionByTask = stripColiseumBranchesFromRecords(
+    rawProviderSessionByTask,
+    orphanedBranchTaskIds,
+  );
+  const rawMessagesByTask = args.appendInterruptedNotices
     ? appendInterruptedTurnNotices({
         messagesByTask: args.snapshot?.messagesByTask ?? empty.messagesByTask,
         latestTurns: args.latestTurns,
       })
     : (args.snapshot?.messagesByTask ?? empty.messagesByTask);
+  const messagesByTask = stripColiseumBranchesFromRecords(
+    rawMessagesByTask,
+    orphanedBranchTaskIds,
+  );
   const messageCountByTask = Object.fromEntries(
     Object.entries(messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const),
   ) as Record<string, number>;
@@ -406,7 +433,10 @@ export function buildWorkspaceSessionState(args: {
     tasks,
     messagesByTask,
     messageCountByTask,
-    promptDraftByTask: args.snapshot?.promptDraftByTask ?? empty.promptDraftByTask,
+    promptDraftByTask: stripColiseumBranchesFromRecords(
+      args.snapshot?.promptDraftByTask ?? empty.promptDraftByTask,
+      orphanedBranchTaskIds,
+    ),
     workspaceInformation: args.snapshot?.workspaceInformation ?? empty.workspaceInformation,
     editorTabs,
     activeEditorTabId,
@@ -416,12 +446,16 @@ export function buildWorkspaceSessionState(args: {
     cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
     activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
     activeSurface,
-    activeTurnIdsByTask,
+    activeTurnIdsByTask: stripColiseumBranchesFromRecords(
+      activeTurnIdsByTask,
+      orphanedBranchTaskIds,
+    ),
     providerSessionByTask,
     nativeSessionReadyByTask: buildNativeSessionReadyByTask({
       tasks,
       providerSessionByTask,
     }),
+    activeColiseumsByTask: {} as Record<string, ColiseumGroupState | undefined>,
   };
 }
 
@@ -433,19 +467,34 @@ export function buildWorkspaceSessionStateFromShell(args: {
   appendInterruptedNotices?: boolean;
 }): WorkspaceSessionState {
   const empty = createEmptyWorkspaceState();
-  const tasks = (args.shell?.tasks ?? empty.tasks).map(normalizeTaskControl);
-  const providerSessionByTask = args.shell?.providerSessionByTask ?? empty.providerSessionByTask;
+  const rawTasks = (args.shell?.tasks ?? empty.tasks).map(normalizeTaskControl);
+  // Reap orphan Coliseum branches — no live group state at bootstrap.
+  const { tasks, orphanedBranchTaskIds } = reapColiseumOrphans({
+    tasks: rawTasks,
+    activeColiseumsByTask: {},
+  });
+  const providerSessionByTask = stripColiseumBranchesFromRecords(
+    args.shell?.providerSessionByTask ?? empty.providerSessionByTask,
+    orphanedBranchTaskIds,
+  );
   const loadedMessagesByTask = args.messagesByTask ?? empty.messagesByTask;
-  const messagesByTask = args.appendInterruptedNotices
+  const rawMessagesByTask = args.appendInterruptedNotices
     ? appendInterruptedTurnNotices({
         messagesByTask: loadedMessagesByTask,
         latestTurns: args.latestTurns,
       })
     : loadedMessagesByTask;
-  const messageCountByTask = {
-    ...(args.shell?.messageCountByTask ?? empty.messageCountByTask),
-    ...(args.messageCountByTaskOverrides ?? {}),
-  };
+  const messagesByTask = stripColiseumBranchesFromRecords(
+    rawMessagesByTask,
+    orphanedBranchTaskIds,
+  );
+  const messageCountByTask = stripColiseumBranchesFromRecords(
+    {
+      ...(args.shell?.messageCountByTask ?? empty.messageCountByTask),
+      ...(args.messageCountByTaskOverrides ?? {}),
+    },
+    orphanedBranchTaskIds,
+  );
   for (const [taskId, messages] of Object.entries(messagesByTask)) {
     messageCountByTask[taskId] = Math.max(messageCountByTask[taskId] ?? 0, messages.length);
   }
@@ -486,7 +535,10 @@ export function buildWorkspaceSessionStateFromShell(args: {
     tasks,
     messagesByTask,
     messageCountByTask,
-    promptDraftByTask: args.shell?.promptDraftByTask ?? empty.promptDraftByTask,
+    promptDraftByTask: stripColiseumBranchesFromRecords(
+      args.shell?.promptDraftByTask ?? empty.promptDraftByTask,
+      orphanedBranchTaskIds,
+    ),
     workspaceInformation: args.shell?.workspaceInformation ?? empty.workspaceInformation,
     editorTabs,
     activeEditorTabId,
@@ -496,12 +548,16 @@ export function buildWorkspaceSessionStateFromShell(args: {
     cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
     activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
     activeSurface,
-    activeTurnIdsByTask,
+    activeTurnIdsByTask: stripColiseumBranchesFromRecords(
+      activeTurnIdsByTask,
+      orphanedBranchTaskIds,
+    ),
     providerSessionByTask,
     nativeSessionReadyByTask: buildNativeSessionReadyByTask({
       tasks,
       providerSessionByTask,
     }),
+    activeColiseumsByTask: {} as Record<string, ColiseumGroupState | undefined>,
   };
 }
 

@@ -1,4 +1,4 @@
-import { isTaskArchived } from "@/lib/tasks";
+import { isColiseumBranch, isTaskArchived } from "@/lib/tasks";
 import type { Task } from "@/types/chat";
 
 export interface ProjectSidebarWorkspaceView {
@@ -67,12 +67,16 @@ function getPreviewTaskTitle(title: string) {
 }
 
 export function buildWorkspaceHoverPreview(args: {
-  tasks: Array<Pick<Task, "id" | "title" | "updatedAt" | "archivedAt">>;
+  tasks: Array<
+    Pick<Task, "id" | "title" | "updatedAt" | "archivedAt"> &
+      Partial<Pick<Task, "coliseumParentTaskId">>
+  >;
   messageCountByTask?: Record<string, number>;
   activeTurnIdsByTask?: Record<string, string | undefined>;
 }): WorkspaceHoverPreview {
+  // Coliseum branches are ephemeral fan-out children — hide from hover previews.
   const visibleTasks = [...args.tasks]
-    .filter((task) => !isTaskArchived(task))
+    .filter((task) => !isColiseumBranch(task) && !isTaskArchived(task))
     .sort((left, right) => parseTaskUpdatedAt(right.updatedAt) - parseTaskUpdatedAt(left.updatedAt));
   const taskTitles = visibleTasks
     .slice(0, WORKSPACE_HOVER_PREVIEW_TASK_LIMIT)

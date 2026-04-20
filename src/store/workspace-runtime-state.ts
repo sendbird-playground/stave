@@ -7,7 +7,7 @@ import type {
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { LayoutState } from "@/store/layout.utils";
-import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
+import type { ChatMessage, ColiseumGroupState, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { applyProviderEventsToWorkspaceSession } from "@/store/workspace-turn-replay";
 import type { WorkspaceSessionState } from "@/store/workspace-session-state";
 
@@ -30,6 +30,7 @@ type ActiveWorkspaceProjectionState = {
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   nativeSessionReadyByTask: Record<string, boolean>;
+  activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
 };
 
 type WorkspaceRuntimeCacheState = ActiveWorkspaceProjectionState & {
@@ -57,6 +58,7 @@ export type ActiveWorkspaceStatePatch = Pick<
   | "activeTurnIdsByTask"
   | "providerSessionByTask"
   | "nativeSessionReadyByTask"
+  | "activeColiseumsByTask"
 >;
 
 export type WorkspaceRuntimeStatePatch = Partial<ActiveWorkspaceStatePatch> & {
@@ -87,6 +89,7 @@ export function createWorkspaceSessionStateFromAppState(
     activeTurnIdsByTask: state.activeTurnIdsByTask,
     providerSessionByTask: state.providerSessionByTask,
     nativeSessionReadyByTask: state.nativeSessionReadyByTask,
+    activeColiseumsByTask: state.activeColiseumsByTask,
   };
 }
 
@@ -108,6 +111,7 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
     activeTurnIdsByTask: session.activeTurnIdsByTask,
     providerSessionByTask: session.providerSessionByTask,
     nativeSessionReadyByTask: session.nativeSessionReadyByTask,
+    activeColiseumsByTask: session.activeColiseumsByTask,
   };
 }
 
@@ -155,6 +159,7 @@ export function saveActiveWorkspaceRuntimeCache(args: {
     | "activeTurnIdsByTask"
     | "providerSessionByTask"
     | "nativeSessionReadyByTask"
+    | "activeColiseumsByTask"
   >;
 }) {
   if (!args.state.activeWorkspaceId) {

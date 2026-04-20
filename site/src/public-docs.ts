@@ -72,6 +72,14 @@ export const PUBLIC_DOC_SECTIONS: PublicDocSection[] = [
         description:
           "Add files and images to the chat composer so the model can work from exact local context.",
       },
+      {
+        routePath: "coliseum",
+        sourcePath: "docs/features/coliseum.md",
+        title: "Coliseum",
+        description:
+          "Run the same prompt across 2–4 models in parallel, compare answers side by side, and promote one winner into your task.",
+        previewImage: "screenshots/coliseum-arena.png",
+      },
     ],
   },
   {
