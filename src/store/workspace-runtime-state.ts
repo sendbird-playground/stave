@@ -4,10 +4,20 @@ import type {
   WorkspaceCliSessionTab,
   WorkspaceTerminalTab,
 } from "@/lib/terminal/types";
-import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
+import type {
+  NormalizedProviderEvent,
+  ProviderId,
+} from "@/lib/providers/provider.types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
+import { collectActiveColiseumTaskIds } from "@/store/coliseum.utils";
 import type { LayoutState } from "@/store/layout.utils";
-import type { ChatMessage, ColiseumGroupState, EditorTab, PromptDraft, Task } from "@/types/chat";
+import type {
+  ChatMessage,
+  ColiseumGroupState,
+  EditorTab,
+  PromptDraft,
+  Task,
+} from "@/types/chat";
 import { applyProviderEventsToWorkspaceSession } from "@/store/workspace-turn-replay";
 import type { WorkspaceSessionState } from "@/store/workspace-session-state";
 
@@ -93,7 +103,9 @@ export function createWorkspaceSessionStateFromAppState(
   };
 }
 
-export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState): ActiveWorkspaceStatePatch {
+export function createActiveWorkspaceStatePatch(
+  session: WorkspaceSessionState,
+): ActiveWorkspaceStatePatch {
   return {
     activeTaskId: session.activeTaskId,
     tasks: session.tasks,
@@ -115,7 +127,9 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
   };
 }
 
-function compactWorkspaceSessionMessages(session: WorkspaceSessionState): WorkspaceSessionState {
+function compactWorkspaceSessionMessages(
+  session: WorkspaceSessionState,
+): WorkspaceSessionState {
   const retainedTaskIds = new Set<string>();
   if (session.activeTaskId) {
     retainedTaskIds.add(session.activeTaskId);
@@ -125,10 +139,20 @@ function compactWorkspaceSessionMessages(session: WorkspaceSessionState): Worksp
       retainedTaskIds.add(taskId);
     }
   }
+  for (const taskId of collectActiveColiseumTaskIds({
+    activeColiseumsByTask: session.activeColiseumsByTask,
+  })) {
+    retainedTaskIds.add(taskId);
+  }
   const nextMessagesByTask = Object.fromEntries(
-    Object.entries(session.messagesByTask).filter(([taskId]) => retainedTaskIds.has(taskId)),
+    Object.entries(session.messagesByTask).filter(([taskId]) =>
+      retainedTaskIds.has(taskId),
+    ),
   );
-  if (Object.keys(nextMessagesByTask).length === Object.keys(session.messagesByTask).length) {
+  if (
+    Object.keys(nextMessagesByTask).length ===
+    Object.keys(session.messagesByTask).length
+  ) {
     return session;
   }
   return {
@@ -165,7 +189,9 @@ export function saveActiveWorkspaceRuntimeCache(args: {
   if (!args.state.activeWorkspaceId) {
     return args.state.workspaceRuntimeCacheById;
   }
-  const nextSession = compactWorkspaceSessionMessages(createWorkspaceSessionStateFromAppState(args.state));
+  const nextSession = compactWorkspaceSessionMessages(
+    createWorkspaceSessionStateFromAppState(args.state),
+  );
   return {
     ...args.state.workspaceRuntimeCacheById,
     [args.state.activeWorkspaceId]: nextSession,
@@ -181,7 +207,8 @@ export function applyPendingProviderEventsToStoreState(args: {
   model: string;
   turnId: string;
 }) {
-  const isActiveWorkspaceTarget = args.taskWorkspaceId === args.state.activeWorkspaceId;
+  const isActiveWorkspaceTarget =
+    args.taskWorkspaceId === args.state.activeWorkspaceId;
   if (isActiveWorkspaceTarget) {
     const activeTurnId = args.state.activeTurnIdsByTask[args.taskId];
     if (activeTurnId !== args.turnId) {
@@ -234,7 +261,8 @@ export function applyPendingProviderEventsToStoreState(args: {
     };
   }
 
-  const workspaceSession = args.state.workspaceRuntimeCacheById[args.taskWorkspaceId];
+  const workspaceSession =
+    args.state.workspaceRuntimeCacheById[args.taskWorkspaceId];
   if (!workspaceSession) {
     return {
       stateChanged: false,
@@ -247,13 +275,16 @@ export function applyPendingProviderEventsToStoreState(args: {
 
   const activeTurnId = workspaceSession.activeTurnIdsByTask[args.taskId];
   if (activeTurnId !== args.turnId) {
-    console.warn("[provider-turn] dropped late events for inactive cached workspace turn", {
-      taskId: args.taskId,
-      workspaceId: args.taskWorkspaceId,
-      expectedTurnId: args.turnId,
-      activeTurnId: activeTurnId ?? null,
-      eventTypes: args.events.map((event) => event.type),
-    });
+    console.warn(
+      "[provider-turn] dropped late events for inactive cached workspace turn",
+      {
+        taskId: args.taskId,
+        workspaceId: args.taskWorkspaceId,
+        expectedTurnId: args.turnId,
+        activeTurnId: activeTurnId ?? null,
+        eventTypes: args.events.map((event) => event.type),
+      },
+    );
     return {
       stateChanged: false,
       statePatch: {} as WorkspaceRuntimeStatePatch,

@@ -2662,6 +2662,122 @@ describe("workspace store hydration ordering", () => {
     expect(upsertCalls).toHaveLength(1);
   });
 
+  test("flushActiveWorkspaceSnapshot keeps Coliseum branch messages resident after completion", async () => {
+    const localStorage = createMemoryStorage();
+    const upsertCalls: Array<unknown> = [];
+    setWindowContext({
+      localStorage,
+      api: {
+        persistence: {
+          listWorkspaces: async () => ({ ok: true, rows: [] }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          upsertWorkspace: async (args: unknown) => {
+            upsertCalls.push(args);
+            return { ok: true };
+          },
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-parent",
+      tasks: [
+        {
+          id: "task-parent",
+          title: "Parent",
+          provider: "claude-code",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+        {
+          id: "task-idle",
+          title: "Idle",
+          provider: "claude-code",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
+      messagesByTask: {
+        "task-parent": [
+          {
+            id: "task-parent-m-1",
+            role: "user",
+            model: "user",
+            providerId: "user",
+            content: "start coliseum",
+            parts: [{ type: "text", text: "start coliseum" }],
+          },
+        ],
+        "branch-a": [
+          {
+            id: "branch-a-m-1",
+            role: "assistant",
+            model: "claude-sonnet-4-6",
+            providerId: "claude-code",
+            content: "branch answer",
+            parts: [{ type: "text", text: "branch answer" }],
+          },
+        ],
+        "task-idle": [
+          {
+            id: "task-idle-m-1",
+            role: "user",
+            model: "user",
+            providerId: "user",
+            content: "drop me",
+            parts: [{ type: "text", text: "drop me" }],
+          },
+        ],
+      },
+      activeTurnIdsByTask: {},
+      activeColiseumsByTask: {
+        "task-parent": {
+          parentTaskId: "task-parent",
+          runId: "run-1",
+          branchTaskIds: ["branch-a"],
+          branchMeta: {
+            "branch-a": {
+              branchTaskId: "branch-a",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+          },
+          createdAt: "2026-03-10T00:00:00.000Z",
+          parentMessageCountAtFanout: 1,
+          status: "ready",
+          championTaskId: null,
+          pickedHistory: [],
+          viewMode: "grid",
+          focusedBranchTaskId: null,
+          minimized: false,
+        },
+      },
+      workspaceInformation: createEmptyWorkspaceInformation(),
+    });
+
+    await useAppStore.getState().flushActiveWorkspaceSnapshot();
+
+    const nextState = useAppStore.getState();
+    expect(nextState.messagesByTask["task-parent"]?.at(-1)?.content).toBe(
+      "start coliseum",
+    );
+    expect(nextState.messagesByTask["branch-a"]?.at(-1)?.content).toBe(
+      "branch answer",
+    );
+    expect(nextState.messagesByTask["task-idle"]).toBeUndefined();
+    expect(upsertCalls).toHaveLength(1);
+  });
+
   test("switchWorkspace preserves inactive workspace turn state and persists it when the stream completes", async () => {
     const localStorage = createMemoryStorage();
     const upsertCalls: Array<unknown> = [];

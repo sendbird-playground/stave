@@ -5,6 +5,7 @@ import {
   MIN_COLISEUM_BRANCHES,
   buildReviewerPrompt,
   clearReviewerFromGroup,
+  collectActiveColiseumTaskIds,
   deriveColiseumRunStatus,
   extractBranchSummary,
   planColiseumFanOut,
@@ -274,7 +275,12 @@ describe("planColiseumFanOut", () => {
     });
 
     expect(result.branchDispatchList).toEqual([
-      { taskId: "child-1", turnId: "turn-1", provider: "codex", model: "gpt-5.4" },
+      {
+        taskId: "child-1",
+        turnId: "turn-1",
+        provider: "codex",
+        model: "gpt-5.4",
+      },
       {
         taskId: "child-2",
         turnId: "turn-2",
@@ -312,17 +318,21 @@ describe("planColiseumFanOut", () => {
     });
 
     // First branch preserves parent's Claude permission mode + pins its own model.
-    expect(result.branchPromptDraftByTask["child-1"]?.runtimeOverrides).toEqual({
-      claudePermissionMode: "acceptEdits",
-      codexPlanMode: true,
-      model: "claude-opus-4-5",
-    });
+    expect(result.branchPromptDraftByTask["child-1"]?.runtimeOverrides).toEqual(
+      {
+        claudePermissionMode: "acceptEdits",
+        codexPlanMode: true,
+        model: "claude-opus-4-5",
+      },
+    );
     // Second branch pins its own model while inheriting the same overrides.
-    expect(result.branchPromptDraftByTask["child-2"]?.runtimeOverrides).toEqual({
-      claudePermissionMode: "acceptEdits",
-      codexPlanMode: true,
-      model: "gpt-5.4",
-    });
+    expect(result.branchPromptDraftByTask["child-2"]?.runtimeOverrides).toEqual(
+      {
+        claudePermissionMode: "acceptEdits",
+        codexPlanMode: true,
+        model: "gpt-5.4",
+      },
+    );
   });
 
   test("falls back to a fresh draft when parent has no prompt draft", () => {
@@ -503,7 +513,10 @@ describe("Coliseum branches stay hidden from task-tree surfaces", () => {
     }
 
     const allTasks: Task[] = [parent, ...result.branchTasks];
-    const visibleActive = getVisibleTasks({ tasks: allTasks, filter: "active" });
+    const visibleActive = getVisibleTasks({
+      tasks: allTasks,
+      filter: "active",
+    });
     expect(visibleActive).toEqual([parent]);
 
     const visibleAll = getVisibleTasks({ tasks: allTasks, filter: "all" });
@@ -709,7 +722,9 @@ describe("promoteColiseumChampion", () => {
     expect(result.nextParentMessages[3]?.id).toBe("task-parent-m-4");
     // Previous pick's content is gone.
     expect(
-      result.nextParentMessages.some((m) => m.content === "previous pick answer"),
+      result.nextParentMessages.some(
+        (m) => m.content === "previous pick answer",
+      ),
     ).toBe(false);
   });
 
@@ -1059,17 +1074,22 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     const championTaskId = plan.branchDispatchList[1]!.taskId;
     const championPriorMessages = plan.branchMessagesByTask[championTaskId]!;
     // Replace streaming assistant with a completed one.
-    const championMessages: ChatMessage[] = championPriorMessages.map((msg, idx) => {
-      if (idx === championPriorMessages.length - 1 && msg.role === "assistant") {
-        return {
-          ...msg,
-          isStreaming: false,
-          content: "codex champion answer",
-          parts: [{ type: "text", text: "codex champion answer" }],
-        };
-      }
-      return msg;
-    });
+    const championMessages: ChatMessage[] = championPriorMessages.map(
+      (msg, idx) => {
+        if (
+          idx === championPriorMessages.length - 1 &&
+          msg.role === "assistant"
+        ) {
+          return {
+            ...msg,
+            isStreaming: false,
+            content: "codex champion answer",
+            parts: [{ type: "text", text: "codex champion answer" }],
+          };
+        }
+        return msg;
+      },
+    );
 
     const parentMessages = createHistory();
     const promotion = promoteColiseumChampion({
@@ -1081,11 +1101,11 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
 
     // Parent gained exactly the post-fan-out tail (user msg + assistant).
     expect(promotion.appendedFromChampion).toBe(2);
-    expect(promotion.nextParentMessages).toHaveLength(parentMessages.length + 2);
+    expect(promotion.nextParentMessages).toHaveLength(
+      parentMessages.length + 2,
+    );
     // The grafted assistant renders as *complete* on the parent.
-    expect(
-      promotion.nextParentMessages.at(-1)?.isStreaming,
-    ).toBe(false);
+    expect(promotion.nextParentMessages.at(-1)?.isStreaming).toBe(false);
     // Non-destructive: the result does NOT include a drop list. Branches stay
     // alive — the store lets the arena remain open so the user can re-pick,
     // switch focus, or keep comparing. Explicit cleanup is handled by
@@ -1148,7 +1168,10 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     const secondChampionPrior = plan.branchMessagesByTask[secondChampionId]!;
     const secondChampionMessages: ChatMessage[] = secondChampionPrior.map(
       (msg, idx) => {
-        if (idx === secondChampionPrior.length - 1 && msg.role === "assistant") {
+        if (
+          idx === secondChampionPrior.length - 1 &&
+          msg.role === "assistant"
+        ) {
           return {
             ...msg,
             isStreaming: false,
@@ -1185,8 +1208,14 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
           championTaskId: secondChampionId,
           status: "promoted",
           pickedHistory: [
-            { championTaskId: firstChampionId, pickedAt: "2026-04-20T12:01:00.000Z" },
-            { championTaskId: secondChampionId, pickedAt: "2026-04-20T12:02:00.000Z" },
+            {
+              championTaskId: firstChampionId,
+              pickedAt: "2026-04-20T12:01:00.000Z",
+            },
+            {
+              championTaskId: secondChampionId,
+              pickedAt: "2026-04-20T12:02:00.000Z",
+            },
           ],
         },
       },
@@ -1293,9 +1322,7 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     // Parent now carries history (2) + run 1 tail (2) + run 2 tail (2) = 6.
     expect(pick2.nextParentMessages).toHaveLength(6);
     // Run 1's champion answer is preserved (sequential, not destructive).
-    expect(
-      pick2.nextParentMessages.map((m) => m.content),
-    ).toEqual([
+    expect(pick2.nextParentMessages.map((m) => m.content)).toEqual([
       "first prompt",
       "first answer",
       "first coliseum prompt",
@@ -1351,6 +1378,48 @@ describe("Coliseum lifecycle end-to-end (pure helpers)", () => {
     });
     expect(reapResult.tasks).toEqual(survivors);
     expect(reapResult.orphanedBranchTaskIds).toEqual([killed!.id]);
+  });
+});
+
+describe("collectActiveColiseumTaskIds", () => {
+  test("retains parent, branch, and reviewer tasks for live arena state", () => {
+    const retained = collectActiveColiseumTaskIds({
+      activeColiseumsByTask: {
+        "task-parent": {
+          parentTaskId: "task-parent",
+          runId: "run-1",
+          branchTaskIds: ["branch-a", "branch-b"],
+          branchMeta: {
+            "branch-a": {
+              branchTaskId: "branch-a",
+              provider: "claude-code",
+              model: "claude-sonnet-4-6",
+            },
+            "branch-b": {
+              branchTaskId: "branch-b",
+              provider: "codex",
+              model: "gpt-5.4",
+            },
+          },
+          createdAt: "2026-04-20T12:00:00.000Z",
+          parentMessageCountAtFanout: 2,
+          status: "ready",
+          championTaskId: null,
+          pickedHistory: [],
+          viewMode: "grid",
+          focusedBranchTaskId: null,
+          minimized: false,
+          reviewerTaskId: "reviewer-1",
+        },
+      },
+    });
+
+    expect([...retained]).toEqual([
+      "task-parent",
+      "branch-a",
+      "branch-b",
+      "reviewer-1",
+    ]);
   });
 });
 
@@ -1589,10 +1658,7 @@ describe("extractBranchSummary", () => {
 
     // Deduped (src/a.ts appears twice in tool uses; only listed once).
     expect(summary.changedFilePaths).toEqual(["src/a.ts", "src/b.ts"]);
-    expect(summary.toolTrace).toEqual([
-      "Edit: src/a.ts",
-      "Write: src/a.ts",
-    ]);
+    expect(summary.toolTrace).toEqual(["Edit: src/a.ts", "Write: src/a.ts"]);
     expect(summary.assistantText).toBe("done");
   });
 
@@ -1704,9 +1770,7 @@ describe("buildReviewerPrompt", () => {
   test("marks streaming branches so the reviewer knows the answer isn't final", () => {
     const prompt = buildReviewerPrompt({
       originalUserPrompt: "x",
-      branchSummaries: [
-        { ...sampleSummaries[0]!, isStreaming: true },
-      ],
+      branchSummaries: [{ ...sampleSummaries[0]!, isStreaming: true }],
     });
     expect(prompt).toContain("still streaming when captured");
   });
@@ -1761,7 +1825,9 @@ describe("buildColiseumMergedFollowUp", () => {
 
   test("uses the reviewer verdict and excludes the champion body when a champion exists", () => {
     const prompt = buildColiseumMergedFollowUp({
-      reviewerVerdict: { content: "Branch 2 has the better edge-case handling." },
+      reviewerVerdict: {
+        content: "Branch 2 has the better edge-case handling.",
+      },
       branchSummaries: sampleSummaries,
       championTaskId: "branch-1",
     });

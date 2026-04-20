@@ -148,7 +148,9 @@ function buildUserParts(args: {
  * Throws when the number of branches is out of range — caller should validate
  * first and show a user-facing error (the composer already enforces 2–4).
  */
-export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutResult {
+export function planColiseumFanOut(
+  input: ColiseumFanOutInput,
+): ColiseumFanOutResult {
   if (input.branches.length < MIN_COLISEUM_BRANCHES) {
     throw new Error(
       `Coliseum requires at least ${MIN_COLISEUM_BRANCHES} branches (got ${input.branches.length}).`,
@@ -181,7 +183,8 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
   const branchMessagesByTask: Record<string, ChatMessage[]> = {};
   const branchMessageCountByTask: Record<string, number> = {};
   const branchActiveTurnIdsByTask: Record<string, string> = {};
-  const branchProviderSessionByTask: Record<string, TaskProviderSessionState> = {};
+  const branchProviderSessionByTask: Record<string, TaskProviderSessionState> =
+    {};
   const branchNativeSessionReadyByTask: Record<string, boolean> = {};
   const branchPromptDraftByTask: Record<string, PromptDraft> = {};
   const branchTaskWorkspaceIdById: Record<string, string> = {};
@@ -213,7 +216,10 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
     branchTasks.push(childTask);
 
     const userMessage: ChatMessage = {
-      id: buildMessageId({ taskId: childTaskId, count: parentMessageCountAtFanout }),
+      id: buildMessageId({
+        taskId: childTaskId,
+        count: parentMessageCountAtFanout,
+      }),
       role: "user",
       model: "user",
       providerId: "user",
@@ -223,7 +229,10 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
     };
 
     const assistantMessage: ChatMessage = {
-      id: buildMessageId({ taskId: childTaskId, count: parentMessageCountAtFanout + 1 }),
+      id: buildMessageId({
+        taskId: childTaskId,
+        count: parentMessageCountAtFanout + 1,
+      }),
       role: "assistant",
       model: branch.model,
       providerId: branch.provider,
@@ -233,7 +242,11 @@ export function planColiseumFanOut(input: ColiseumFanOutInput): ColiseumFanOutRe
       parts: [],
     };
 
-    const nextMessages = [...input.parentMessages, userMessage, assistantMessage];
+    const nextMessages = [
+      ...input.parentMessages,
+      userMessage,
+      assistantMessage,
+    ];
     branchMessagesByTask[childTaskId] = nextMessages;
     branchMessageCountByTask[childTaskId] = nextMessages.length;
     branchActiveTurnIdsByTask[childTaskId] = turnId;
@@ -404,10 +417,7 @@ export function unpickColiseumChampion(input: {
   parentMessages: ChatMessage[];
 }): { nextParentMessages: ChatMessage[] } {
   const { group, parentMessages } = input;
-  const preGraft = parentMessages.slice(
-    0,
-    group.parentMessageCountAtFanout,
-  );
+  const preGraft = parentMessages.slice(0, group.parentMessageCountAtFanout);
   return { nextParentMessages: preGraft };
 }
 
@@ -443,6 +453,33 @@ export interface ColiseumActivitySummary {
   hasActivity: boolean;
 }
 
+/**
+ * Keep the parent task plus all Coliseum-owned ephemeral tasks resident while
+ * a run is still live in runtime state. Snapshot/cache compaction uses this to
+ * avoid dropping finished branch messages out from under the arena.
+ */
+export function collectActiveColiseumTaskIds(input: {
+  activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
+}) {
+  const taskIds = new Set<string>();
+
+  for (const group of Object.values(input.activeColiseumsByTask)) {
+    if (!group) {
+      continue;
+    }
+
+    taskIds.add(group.parentTaskId);
+    for (const branchTaskId of group.branchTaskIds) {
+      taskIds.add(branchTaskId);
+    }
+    if (group.reviewerTaskId) {
+      taskIds.add(group.reviewerTaskId);
+    }
+  }
+
+  return taskIds;
+}
+
 export function summarizeColiseumActivity(input: {
   activeColiseumsByTask: Record<string, ColiseumGroupState | undefined>;
   activeTurnIdsByTask: Record<string, string | undefined>;
@@ -462,8 +499,9 @@ export function summarizeColiseumActivity(input: {
       0,
     );
     const reviewerRunning = Boolean(
-      (group.reviewerTaskId && input.activeTurnIdsByTask[group.reviewerTaskId])
-      || group.reviewerVerdict?.status === "running",
+      (group.reviewerTaskId &&
+        input.activeTurnIdsByTask[group.reviewerTaskId]) ||
+      group.reviewerVerdict?.status === "running",
     );
 
     if (branchRunningCount > 0 || reviewerRunning) {
@@ -581,17 +619,16 @@ export function extractBranchSummary(input: {
   const assistantMessages = tail.filter((m) => m.role === "assistant");
   const lastAssistant = assistantMessages[assistantMessages.length - 1];
 
-  const assistantText =
-    assistantMessages
-      .flatMap((msg) =>
-        msg.parts
-          .filter((p): p is Extract<MessagePart, { type: "text" }> =>
-            p.type === "text",
-          )
-          .map((p) => p.text),
-      )
-      .join("\n")
-      .trim();
+  const assistantText = assistantMessages
+    .flatMap((msg) =>
+      msg.parts
+        .filter(
+          (p): p is Extract<MessagePart, { type: "text" }> => p.type === "text",
+        )
+        .map((p) => p.text),
+    )
+    .join("\n")
+    .trim();
 
   const changedFilePaths: string[] = [];
   const seenFiles = new Set<string>();
@@ -770,12 +807,11 @@ export function buildColiseumMergedFollowUp(
     );
   }
 
-  const includedBranches =
-    input.championTaskId
-      ? input.branchSummaries.filter(
-          (summary) => summary.branchTaskId !== input.championTaskId,
-        )
-      : input.branchSummaries;
+  const includedBranches = input.championTaskId
+    ? input.branchSummaries.filter(
+        (summary) => summary.branchTaskId !== input.championTaskId,
+      )
+    : input.branchSummaries;
 
   const lines: string[] = [];
   lines.push(
