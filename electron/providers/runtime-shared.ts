@@ -31,6 +31,25 @@ export function parseBooleanEnv(args: { value: string | undefined; fallback: boo
   return args.fallback;
 }
 
+/**
+ * Parse a positive integer environment variable. Returns the fallback when the
+ * value is undefined, empty, non-numeric, or not strictly positive.
+ */
+export function parsePositiveIntEnv(args: {
+  value: string | undefined;
+  fallback: number;
+}) {
+  const normalized = args.value?.trim();
+  if (!normalized) {
+    return args.fallback;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+    return args.fallback;
+  }
+  return parsed;
+}
+
 export function parseSemverVersion(args: { value: string }) {
   const match = args.value.match(/(\d+)\.(\d+)\.(\d+)/);
   if (!match) {

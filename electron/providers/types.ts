@@ -32,6 +32,21 @@ export interface StreamTurnArgs {
   runtimeOptions?: ProviderRuntimeOptions;
 }
 
+/**
+ * Result returned by the provider-runtime approval/user-input responders.
+ *
+ * We used to return a plain `boolean`, but that made it impossible for the
+ * caller to tell the user *why* delivery failed — which matters when the
+ * approve/revise buttons on the plan viewer hang waiting for a responder that
+ * never fires. Returning `pendingRequestIds` on failure lets `runtime.ts`
+ * include that snapshot in the IPC response and in the bridge warning event
+ * surfaced to the renderer, so stale request IDs become diagnosable instead
+ * of triggering a silent UI lock.
+ */
+export type ProviderResponderResult =
+  | { ok: true }
+  | { ok: false; reason: "unknown-request"; pendingRequestIds: string[] };
+
 export type BridgeEvent =
   | { type: "thinking"; text: string; isStreaming?: boolean }
   | { type: "text"; text: string; segmentId?: string }

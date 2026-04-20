@@ -1,3 +1,23 @@
+## [0.3.9](https://github.com/sendbird-playground/stave/compare/v0.3.8...v0.3.9) (2026-04-19)
+
+### Highlights
+
+- add a configurable preset bar between the task tabs and chat panel so teams can launch common Claude, Codex, Stave Auto, and native CLI-session flows in one click
+- add `Alt+0-9` model shortcuts with persisted slot mappings, updated keyboard-shortcut docs, and settings support for quick provider/model switching from the prompt surface
+- archive workspaces instantly in the renderer while git worktree removal, branch cleanup, script shutdown, and persistence cleanup continue in the background
+- harden Orbit workspace-script launching by tokenizing direct commands safely, falling back to a shell wrapper only when necessary, and tightening the associated regression coverage
+- keep the full-screen image lightbox above the app menu and other overlay layers so screenshot and media previews are no longer hidden behind app chrome
+- refresh Codex app-server ChatGPT auth-token handling, return explicit JSON-RPC errors on refresh failure, and show clearer account readiness states in Codex settings
+- refresh the local skill/docs guidance around provider-runtime symmetry so the docs site and skill index better explain cross-provider env and runtime checks
+
+### References
+
+- [#489](https://github.com/sendbird-playground/stave/pull/489)
+- [#490](https://github.com/sendbird-playground/stave/pull/490)
+- [#491](https://github.com/sendbird-playground/stave/pull/491)
+- [#492](https://github.com/sendbird-playground/stave/pull/492)
+- [#493](https://github.com/sendbird-playground/stave/pull/493)
+- [#494](https://github.com/sendbird-playground/stave/pull/494)
 ## [0.3.8](https://github.com/sendbird-playground/stave/compare/v0.3.7...v0.3.8) (2026-04-17)
 
 ### Highlights

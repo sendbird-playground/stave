@@ -26,7 +26,7 @@ Replace the legacy workspace/task shell with a three-part layout:
 
 - Task tabs belong to the selected workspace, not the left project list.
 - `Cmd/Ctrl+N` should create a new task in the selected workspace, and `Cmd/Ctrl+W` should archive the currently selected task.
-- `Cmd/Ctrl+1..9` should select the first nine visible workspaces in sidebar order from top to bottom.
+- `Cmd/Ctrl+Shift+1..9` should select the first nine visible workspaces in sidebar order from top to bottom.
 - Task tab close should confirm before archiving.
 - Project delete removes the project from Stave's list only.
 - Workspace rows show a responding indicator if any child task is actively running, including inactive workspaces.
@@ -81,7 +81,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - lets the sidebar background pattern show through project/workspace containers with restrained liquid-glass translucency
   - keeps workspace hover and selected states slightly stronger than the glass baseline so interaction state stays readable without losing the subdued mood
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
-  - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
+  - assigns `Cmd/Ctrl+Shift+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
   - adds compact workspace-summary tooltips that prioritize recent task titles over raw message text, while lazily loading a lightweight workspace shell summary on first hover instead of the full shell payload
 - `SettingsDialog`
   - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
@@ -95,7 +95,9 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - supports drag-and-drop reordering directly in the tab strip for tasks and CLI sessions
   - lets users middle-click task and CLI session tabs to close them through the existing archive / close flows, while leaving managed tasks protected
   - exposes the archive action with confirmation, per-task overflow menu, and workspace-level `Task History`
-  - exposes a direct `New CLI Session` launcher with the four provider/context combinations instead of a multi-step dialog
+  - keeps a compact overflow menu for strip-level actions such as `Task History` and showing or hiding the preset bar
+  - uses a single icon-only `+` launcher at the far right so `New Task` and `New CLI Session` live in one dropdown, with CLI options still expanding to the provider/context choices
+  - keeps the preset bar keyboard-aware, with the first nine presets responding to `Ctrl+1..9` in current list order and a dedicated settings section for managing that order
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right

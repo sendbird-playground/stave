@@ -34,7 +34,12 @@ import {
   setCachedAvailability,
 } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
-import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
+import type {
+  BridgeEvent,
+  ProviderResponderResult,
+  ProviderRuntime,
+  StreamTurnArgs,
+} from "./types";
 import {
   applyStaveRoleRuntimeOverrides,
   DEFAULT_STAVE_AUTO_PROFILE,
@@ -56,18 +61,30 @@ const COMPLETED_STREAM_TTL_MS = 60 * 1000;
 const ACTIVE_STREAM_RETAINED_BYTES_MAX = 512 * 1024;
 const BATCH_TURN_RETAINED_BYTES_MAX = 2 * 1024 * 1024;
 const DEFAULT_PROVIDER_TASK_KEY = "default";
+type TurnTimeoutController = {
+  promise: Promise<null>;
+  pauseForDecision: () => void;
+  resumeAfterDecision: () => void;
+  dispose: () => void;
+  readonly timedOut: boolean;
+};
+
 type ActiveRuntimeSession = {
   turnId: string;
   providerId: StreamTurnArgs["providerId"];
   taskId?: string;
   streamId?: string;
   abort?: () => void;
-  respondApproval?: (args: { requestId: string; approved: boolean }) => boolean;
+  respondApproval?: (args: {
+    requestId: string;
+    approved: boolean;
+  }) => ProviderResponderResult;
   respondUserInput?: (args: {
     requestId: string;
     answers?: Record<string, string>;
     denied?: boolean;
-  }) => boolean;
+  }) => ProviderResponderResult;
+  timeoutController?: TurnTimeoutController;
 };
 
 const activeSessions = new Map<string, ActiveRuntimeSession>();
@@ -102,6 +119,7 @@ function upsertActiveSession(args: {
   abort?: () => void;
   respondApproval?: ActiveRuntimeSession["respondApproval"];
   respondUserInput?: ActiveRuntimeSession["respondUserInput"];
+  timeoutController?: TurnTimeoutController;
 }) {
   const current = activeSessions.get(args.turnId);
   activeSessions.set(args.turnId, {
@@ -112,6 +130,7 @@ function upsertActiveSession(args: {
     abort: args.abort ?? current?.abort,
     respondApproval: args.respondApproval ?? current?.respondApproval,
     respondUserInput: args.respondUserInput ?? current?.respondUserInput,
+    timeoutController: args.timeoutController ?? current?.timeoutController,
   });
 }
 
@@ -144,6 +163,99 @@ function abortActive(args: { turnId: string }) {
 
 function clearActiveTurnState(args: { turnId: string }) {
   activeSessions.delete(args.turnId);
+}
+
+function summarizeActiveTurns() {
+  return Array.from(activeSessions.values()).map((session) => ({
+    turnId: session.turnId,
+    providerId: session.providerId,
+    taskId: session.taskId,
+  }));
+}
+
+/**
+ * Inject a bridge warning into the active stream for a given turn, if any is
+ * open. The UI picks these up via the same channel as runtime errors, so the
+ * renderer can surface a toast/log entry instead of silently ignoring a failed
+ * IPC response. Safe to call when no stream exists — it simply no-ops.
+ */
+function emitBridgeWarningForTurn(args: { turnId: string; message: string }) {
+  const streamId = activeSessions.get(args.turnId)?.streamId;
+  if (!streamId) {
+    return;
+  }
+  const session = activeStreams.get(streamId);
+  if (!session) {
+    return;
+  }
+  appendStreamEvent(session, {
+    type: "error",
+    message: args.message,
+    recoverable: true,
+  });
+  session.updatedAt = Date.now();
+}
+
+type ResponderKind = "approval" | "user-input";
+
+function describeResponderKind(kind: ResponderKind) {
+  return kind === "approval" ? "approval" : "user-input";
+}
+
+/**
+ * Shared delivery path for `respondApproval` / `respondUserInput`.
+ *
+ * Why the indirection:
+ * - Both responders share the same miss paths (no active session / responder
+ *   rejected with unknown-request), and both need to surface a bridge warning
+ *   so the renderer can react even though the direct IPC `ok:false` response
+ *   is often unhandled by hot UI surfaces.
+ * - Capturing pending request IDs and active turn IDs in the error message
+ *   turns an opaque "didn't land" into a diagnosable "we expected X, got Y".
+ */
+function deliverResponderResult<
+  Responder extends (...args: never[]) => ProviderResponderResult,
+>(args: {
+  kind: ResponderKind;
+  turnId: string;
+  requestId: string;
+  selectResponder: (session: ActiveRuntimeSession) => Responder | undefined;
+  invoke: (responder: Responder) => ProviderResponderResult;
+}): { ok: boolean; message: string } {
+  const label = describeResponderKind(args.kind);
+  const session = activeSessions.get(args.turnId);
+  const responder = session ? args.selectResponder(session) : undefined;
+  if (!session || !responder) {
+    const activeTurns = summarizeActiveTurns();
+    const activeTurnIds = activeTurns.map((entry) => entry.turnId);
+    const message =
+      `No active ${label} responder for turn ${args.turnId}. ` +
+      `requestId=${args.requestId}. activeTurnIds=[${activeTurnIds.join(", ")}]`;
+    // Try to surface the warning onto an adjacent live stream for the same
+    // taskId even though the turn itself is gone — best-effort only.
+    for (const entry of activeTurns) {
+      emitBridgeWarningForTurn({ turnId: entry.turnId, message });
+    }
+    return { ok: false, message };
+  }
+
+  const result = args.invoke(responder);
+  if (result.ok) {
+    // The user has made their decision — resume the turn-level timeout so
+    // the provider's generation budget resumes from the full allowance.
+    session.timeoutController?.resumeAfterDecision();
+    return {
+      ok: true,
+      message: `${label === "approval" ? "Approval" : "User-input"} response delivered to turn ${args.turnId}. requestId=${args.requestId}`,
+    };
+  }
+
+  const pendingIds = result.pendingRequestIds.join(", ");
+  const message =
+    `${label === "approval" ? "Approval" : "User-input"} responder rejected unknown request for turn ${args.turnId}. ` +
+    `requestId=${args.requestId}. pendingRequestIds=[${pendingIds}]`;
+  emitBridgeWarningForTurn({ turnId: args.turnId, message });
+  return { ok: false, message };
 }
 
 function pruneExpiredStreams(now = Date.now()) {
@@ -306,6 +418,103 @@ async function withTimeout<T>(args: {
       clearTimeout(timeoutHandle);
     }
   }
+}
+
+/**
+ * Turn-level timeout that can be paused while the UI is waiting on a user
+ * decision (approval / user_input elicitation).
+ *
+ * Why pausing matters: without this, an unattended approval prompt that sits
+ * idle for longer than `sdkTurnTimeoutMs` (5 min by default) silently aborts
+ * the turn the moment the user finally clicks Approve. That produces the
+ * "plan completed but UI is stuck" symptom because the abort races with
+ * the tool_result, corrupting replay state.
+ *
+ * Semantics:
+ * - The timer starts when the turn is created.
+ * - `pauseForDecision()` is called each time the bridge emits `approval` or
+ *   `user_input`. Multiple simultaneous decisions are refcounted.
+ * - `resumeAfterDecision()` is called when a responder fires successfully
+ *   (via respondApproval/respondUserInput) OR on a matching tool_result event.
+ * - On resume we deliberately **reset** the remaining budget to the full
+ *   `timeoutMs` rather than continue where we paused: the user's
+ *   deliberation latency should never eat the provider's generation budget.
+ * - `dispose()` is called from the finally block regardless of outcome.
+ */
+export function createTurnTimeoutController(args: {
+  timeoutMs: number;
+  onTimeout: () => void;
+}): TurnTimeoutController {
+  let remainingMs = args.timeoutMs;
+  let handle: NodeJS.Timeout | null = null;
+  let disposed = false;
+  let timedOut = false;
+  let pendingDecisionCount = 0;
+
+  let resolvePromise: (value: null) => void = () => {};
+  const promise = new Promise<null>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  const stopTimer = () => {
+    if (handle !== null) {
+      clearTimeout(handle);
+      handle = null;
+    }
+  };
+
+  const start = () => {
+    if (disposed || handle !== null || timedOut) {
+      return;
+    }
+    handle = setTimeout(() => {
+      handle = null;
+      if (disposed || timedOut) {
+        return;
+      }
+      timedOut = true;
+      args.onTimeout();
+      resolvePromise(null);
+    }, remainingMs);
+  };
+
+  const pauseForDecision = () => {
+    if (disposed || timedOut) {
+      return;
+    }
+    pendingDecisionCount += 1;
+    if (pendingDecisionCount === 1) {
+      stopTimer();
+    }
+  };
+
+  const resumeAfterDecision = () => {
+    if (pendingDecisionCount === 0 || disposed || timedOut) {
+      return;
+    }
+    pendingDecisionCount -= 1;
+    if (pendingDecisionCount === 0) {
+      remainingMs = args.timeoutMs;
+      start();
+    }
+  };
+
+  const dispose = () => {
+    disposed = true;
+    stopTimer();
+  };
+
+  start();
+
+  return {
+    promise,
+    pauseForDecision,
+    resumeAfterDecision,
+    dispose,
+    get timedOut() {
+      return timedOut;
+    },
+  };
 }
 
 async function runProviderTurn(
@@ -563,18 +772,54 @@ async function runProviderTurn(
     return;
   }
 
+  // Shared across Claude + Codex: a pausable timeout controller keeps the
+  // approval/user_input wait from silently timing out the turn. See
+  // `createTurnTimeoutController` for the full rationale.
+  const timeoutController = createTurnTimeoutController({
+    timeoutMs: turnTimeoutMs,
+    onTimeout: () => {
+      abortActive({ turnId });
+    },
+  });
+  upsertActiveSession({
+    turnId,
+    providerId: args.providerId,
+    taskId: args.taskId,
+    timeoutController,
+  });
+
+  const runStreamWithPausableTimeout = async <T>(
+    task: Promise<T>,
+  ): Promise<T | null> => {
+    return Promise.race([task, timeoutController.promise]);
+  };
+
+  const wrapStreamOnEvent = (downstream?: (event: BridgeEvent) => void) =>
+    (event: BridgeEvent) => {
+      if (timeoutController.timedOut) {
+        return;
+      }
+      // Pause the turn clock the moment we ask the user to decide. Resume is
+      // driven by the responder delivery in `deliverResponderResult`, with a
+      // defensive fallback on `tool_result` / `error` events so a crashed
+      // adapter can't leave the controller paused forever.
+      if (event.type === "approval" || event.type === "user_input") {
+        timeoutController.pauseForDecision();
+      } else if (event.type === "tool_result" || event.type === "error") {
+        // These are the observable "decision processed" / "stream failed"
+        // signals. If we're still paused, resume so the remaining turn time
+        // still applies.
+        timeoutController.resumeAfterDecision();
+      }
+      downstream?.(event);
+    };
+
   if (args.providerId === "claude-code") {
-    let timedOut = false;
     try {
-      const events = await withTimeout({
-        task: streamClaudeWithSdk({
+      const events = await runStreamWithPausableTimeout(
+        streamClaudeWithSdk({
           ...args,
-          onEvent: (event) => {
-            if (timedOut) {
-              return;
-            }
-            args.onEvent?.(event);
-          },
+          onEvent: wrapStreamOnEvent(args.onEvent),
           registerAbort: (aborter) => {
             upsertActiveSession({
               turnId,
@@ -600,12 +845,7 @@ async function runProviderTurn(
             });
           },
         }),
-        timeoutMs: turnTimeoutMs,
-        onTimeout: () => {
-          timedOut = true;
-          abortActive({ turnId });
-        },
-      });
+      );
       if (events && events.length > 0) {
         return events;
       }
@@ -615,23 +855,18 @@ async function runProviderTurn(
       fallback.forEach((event) => args.onEvent?.(event));
       return fallback;
     } finally {
+      timeoutController.dispose();
       clearActiveTurnState({ turnId });
     }
   }
 
-  let timedOut = false;
   try {
-    const events = await withTimeout({
-      task: (shouldUseLegacyCodexRuntime()
+    const events = await runStreamWithPausableTimeout(
+      (shouldUseLegacyCodexRuntime()
         ? streamCodexWithSdk
         : streamCodexWithAppServer)({
         ...args,
-        onEvent: (event) => {
-          if (timedOut) {
-            return;
-          }
-          args.onEvent?.(event);
-        },
+        onEvent: wrapStreamOnEvent(args.onEvent),
         registerAbort: (aborter) => {
           upsertActiveSession({
             turnId,
@@ -657,12 +892,7 @@ async function runProviderTurn(
           });
         },
       }),
-      timeoutMs: turnTimeoutMs,
-      onTimeout: () => {
-        timedOut = true;
-        abortActive({ turnId });
-      },
-    });
+    );
     if (events && events.length > 0) {
       return events;
     }
@@ -672,6 +902,7 @@ async function runProviderTurn(
     fallback.forEach((event) => args.onEvent?.(event));
     return fallback;
   } finally {
+    timeoutController.dispose();
     clearActiveTurnState({ turnId });
   }
 }
@@ -816,50 +1047,22 @@ export const providerRuntime: ProviderRuntime = {
       message: `Cleaned provider runtime state for task ${taskId}.`,
     };
   },
-  respondApproval: ({ turnId, requestId, approved }) => ({
-    ...(() => {
-      const responder = activeSessions.get(turnId)?.respondApproval;
-      if (!responder) {
-        return {
-          ok: false,
-          message: `No active approval responder for turn ${turnId}. requestId=${requestId}`,
-        };
-      }
-      const delivered = responder({ requestId, approved });
-      if (!delivered) {
-        return {
-          ok: false,
-          message: `Approval responder rejected request for turn ${turnId}. requestId=${requestId}`,
-        };
-      }
-      return {
-        ok: true,
-        message: `Approval response delivered to turn ${turnId}. requestId=${requestId}`,
-      };
-    })(),
-  }),
-  respondUserInput: ({ turnId, requestId, answers, denied }) => ({
-    ...(() => {
-      const responder = activeSessions.get(turnId)?.respondUserInput;
-      if (!responder) {
-        return {
-          ok: false,
-          message: `No active user-input responder for turn ${turnId}. requestId=${requestId}`,
-        };
-      }
-      const delivered = responder({ requestId, answers, denied });
-      if (!delivered) {
-        return {
-          ok: false,
-          message: `User-input responder rejected request for turn ${turnId}. requestId=${requestId}`,
-        };
-      }
-      return {
-        ok: true,
-        message: `User-input response delivered to turn ${turnId}. requestId=${requestId}`,
-      };
-    })(),
-  }),
+  respondApproval: ({ turnId, requestId, approved }) =>
+    deliverResponderResult({
+      kind: "approval",
+      turnId,
+      requestId,
+      invoke: (responder) => responder({ requestId, approved }),
+      selectResponder: (session) => session.respondApproval,
+    }),
+  respondUserInput: ({ turnId, requestId, answers, denied }) =>
+    deliverResponderResult({
+      kind: "user-input",
+      turnId,
+      requestId,
+      invoke: (responder) => responder({ requestId, answers, denied }),
+      selectResponder: (session) => session.respondUserInput,
+    }),
   checkAvailability: async ({ providerId, runtimeOptions }) => {
     if (providerId === "claude-code") {
       const result = describeClaudeAvailability({ runtimeOptions });

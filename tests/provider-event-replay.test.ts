@@ -334,7 +334,14 @@ describe("appendProviderEventToAssistant", () => {
     });
   });
 
-  test("keeps the turn active when done arrives before a pending approval is resolved", () => {
+  test("interrupts a dangling pending approval when done arrives and clears the turn", () => {
+    // Previously replay preserved the pending approval state on `done` to
+    // keep the turn active so the approval popup stayed interactive. That
+    // caused the "Claude delivered a plan but UI shows waiting" lock: when
+    // the stream ends (natural completion, abort, or a Task-A auto-deny
+    // timeout) any pending approval part kept `activeTurnIdsByTask` set,
+    // disabling PlanViewer's Approve/Revise and the chat input. The done
+    // handler now interrupts orphaned pending parts so the turn clears.
     const replayed = replayProviderEventsToTaskState({
       taskId: "task-1",
       messages: [],
@@ -352,13 +359,105 @@ describe("appendProviderEventToAssistant", () => {
       turnId: "turn-1",
     });
 
-    expect(replayed.activeTurnId).toBe("turn-1");
+    expect(replayed.activeTurnId).toBeUndefined();
     expect(replayed.messages[0]?.parts[0]).toMatchObject({
       type: "approval",
       requestId: "tool-1",
-      state: "approval-requested",
+      state: "approval-interrupted",
     });
     expect(replayed.messages[0]?.isStreaming).toBe(false);
+  });
+
+  test("interrupts a dangling user_input request when done arrives", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        {
+          type: "user_input",
+          toolName: "AskUserQuestion",
+          requestId: "q-1",
+          questions: [
+            {
+              question: "Which mode?",
+              header: "Mode",
+              options: [{ label: "fast", description: "fast" }],
+            },
+          ],
+        },
+        { type: "done", stop_reason: "aborted" },
+      ],
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+      turnId: "turn-1",
+    });
+
+    expect(replayed.activeTurnId).toBeUndefined();
+    expect(replayed.messages[0]?.parts.at(-1)).toMatchObject({
+      type: "user_input",
+      requestId: "q-1",
+      state: "input-interrupted",
+    });
+  });
+
+  test("leaves already-responded approval parts untouched at done", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        {
+          type: "approval",
+          toolName: "bash",
+          requestId: "tool-1",
+          description: "Run npm test",
+        },
+        {
+          type: "tool_result",
+          tool_use_id: "tool-1",
+          output: "ok",
+        },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "gpt-5.4",
+      turnId: "turn-1",
+    });
+
+    expect(replayed.activeTurnId).toBeUndefined();
+    expect(replayed.messages[0]?.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "tool-1",
+      state: "approval-responded",
+    });
+  });
+
+  test("clears the turn when a plan response finishes with a dangling approval part", () => {
+    // Regression: Claude delivered an ExitPlanMode plan while an earlier
+    // pending approval part was still on the assistant message (e.g. carry-
+    // over from a prior tool whose approval was routed but never resolved).
+    // The plan turn must still clear `activeTurnId` so PlanViewer's
+    // Approve/Revise controls enable.
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        {
+          type: "approval",
+          toolName: "bash",
+          requestId: "tool-1",
+          description: "Run npm test",
+        },
+        { type: "plan_ready", planText: "1. Inspect\n2. Patch" },
+        { type: "done" },
+      ],
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+      turnId: "turn-1",
+    });
+
+    expect(replayed.activeTurnId).toBeUndefined();
+    const planMessage = replayed.messages.at(-1);
+    expect(planMessage?.isPlanResponse).toBe(true);
   });
 });
 

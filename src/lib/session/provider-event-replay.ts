@@ -5,6 +5,7 @@ import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provid
 import {
   hasRenderableAssistantContent,
   findLatestPendingToolInteractionPart,
+  interruptPendingToolInteractionParts,
   mergePromptSuggestions,
   mergeToolResultIntoPart,
   resolvePendingToolInteractionPartsByRequestId,
@@ -809,10 +810,12 @@ export function appendProviderEventToAssistant(args: {
         content: "No response returned.",
         completedAt,
         isStreaming: false,
-        parts: [
-          ...message.parts,
-          { type: "system_event", content: "No response returned." },
-        ],
+        parts: interruptPendingToolInteractionParts({
+          parts: [
+            ...message.parts,
+            { type: "system_event", content: "No response returned." },
+          ],
+        }),
       };
     }
 
@@ -822,11 +825,27 @@ export function appendProviderEventToAssistant(args: {
       completedAt,
     });
 
+    // Any pending approval/user_input parts at turn completion are orphaned —
+    // either the turn ended naturally (the SDK would not emit done while still
+    // waiting for a canUseTool decision, so this only happens when the stream
+    // ended without a decision — e.g. after a Task-A timeout auto-deny) or the
+    // turn was aborted/errored and the runtime synthesized a done. In both
+    // cases leaving the parts in `*-requested` state keeps `isTurnActive`
+    // true via `findLatestPendingToolInteractionPart`, which locks the
+    // PlanViewer's Approve/Revise controls and any dependent UI.
+    const nextParts = truncated
+      ? [
+          ...finalizedMessage.parts,
+          {
+            type: "system_event" as const,
+            content: "Response was cut off because the output limit was reached.",
+          },
+        ]
+      : finalizedMessage.parts;
+
     return {
       ...finalizedMessage,
-      parts: truncated
-        ? [...finalizedMessage.parts, { type: "system_event" as const, content: "Response was cut off because the output limit was reached." }]
-        : finalizedMessage.parts,
+      parts: interruptPendingToolInteractionParts({ parts: nextParts }),
     };
   }
 

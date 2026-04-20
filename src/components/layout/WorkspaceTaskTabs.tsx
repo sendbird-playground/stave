@@ -1,11 +1,4 @@
-import {
-  Check,
-  Copy,
-  Ellipsis,
-  Plus,
-  SquareTerminal,
-  X,
-} from "lucide-react";
+import { Check, Copy, Ellipsis, Plus, SquareTerminal, X } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -29,10 +22,15 @@ import {
   DrawerHeader,
   DrawerTitle,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Input,
   Kbd,
@@ -574,6 +572,7 @@ export function WorkspaceTaskTabs() {
     activeSurface,
     cliSessionTabs,
     providerAvailability,
+    showPresetBar,
     selectTask,
     createTask,
     archiveTask,
@@ -582,6 +581,7 @@ export function WorkspaceTaskTabs() {
     restoreTask,
     reorderTasks,
     createCliSessionTab,
+    updateSettings,
     setActiveCliSessionTab,
     renameCliSessionTab,
     reorderCliSessionTabs,
@@ -595,6 +595,7 @@ export function WorkspaceTaskTabs() {
           state.activeSurface,
           state.cliSessionTabs,
           state.providerAvailability,
+          state.settings.showPresetBar,
           state.selectTask,
           state.createTask,
           state.archiveTask,
@@ -603,6 +604,7 @@ export function WorkspaceTaskTabs() {
           state.restoreTask,
           state.reorderTasks,
           state.createCliSessionTab,
+          state.updateSettings,
           state.setActiveCliSessionTab,
           state.renameCliSessionTab,
           state.reorderCliSessionTabs,
@@ -865,99 +867,6 @@ export function WorkspaceTaskTabs() {
               <DropdownMenuTrigger
                 className={triggerButtonClassName({
                   className:
-                    "h-8 gap-2 rounded-sm px-2.5 text-muted-foreground",
-                })}
-              >
-                <SquareTerminal className="size-4" />
-                New CLI Session
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Start Here</DropdownMenuLabel>
-                {CLI_SESSION_CHOICES.map((choice) => {
-                  const providerAvailable =
-                    providerAvailability[choice.provider];
-                  const requiresTask = choice.contextMode === "active-task";
-                  const disabled =
-                    !providerAvailable ||
-                    (requiresTask && !activeTask) ||
-                    false;
-                  const providerLabel = getCliSessionProviderLabel(
-                    choice.provider,
-                  );
-                  const contextLabel = getCliSessionContextLabel(
-                    choice.contextMode,
-                  );
-                  const secondaryLabel = !providerAvailable
-                    ? `${providerLabel} is unavailable in this environment`
-                    : requiresTask
-                      ? activeTask
-                        ? `Continue from the active task context`
-                        : "Select an active task first"
-                      : "Use the current workspace context";
-                  const taskHint =
-                    requiresTask && activeTask ? activeTask.title : null;
-
-                  return (
-                    <DropdownMenuItem
-                      key={`${choice.provider}:${choice.contextMode}`}
-                      disabled={disabled}
-                      className="items-start"
-                      onSelect={() => {
-                        createCliSessionTab({
-                          provider: choice.provider,
-                          contextMode: choice.contextMode,
-                        });
-                      }}
-                    >
-                      <div className="flex min-w-0 items-start gap-2">
-                        <ModelIcon
-                          providerId={choice.provider}
-                          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">
-                            {providerLabel} · {contextLabel}
-                          </div>
-                          <div className="mt-0.5 text-xs text-muted-foreground">
-                            {secondaryLabel}
-                          </div>
-                          {taskHint && (
-                            <div className="mt-0.5 truncate text-xs text-muted-foreground/60">
-                              {taskHint}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  className={triggerButtonClassName({
-                    className:
-                      "h-8 gap-2 rounded-sm px-2.5 text-muted-foreground",
-                  })}
-                  onClick={() => createTask({ title: "" })}
-                >
-                  <Plus className="size-4" />
-                  New Task
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <span>New Task</span>
-                  <KbdGroup className="ml-1">
-                    <Kbd>{shortcutModifierSymbol}</Kbd>
-                    <Kbd>N</Kbd>
-                  </KbdGroup>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={triggerButtonClassName({
-                  className:
                     "h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground",
                 })}
               >
@@ -968,9 +877,113 @@ export function WorkspaceTaskTabs() {
                   Task History
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={showPresetBar}
+                  onCheckedChange={(checked) =>
+                    updateSettings({ patch: { showPresetBar: checked } })
+                  }
+                >
+                  Show preset bar
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground"
+                        aria-label="Create new task or CLI session"
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <span>New task or CLI session</span>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem onSelect={() => createTask({ title: "" })}>
+                  <Plus className="size-4" />
                   New Task
+                  <DropdownMenuShortcut className="text-[11px] tracking-normal">
+                    {shortcutModifierSymbol}+N
+                  </DropdownMenuShortcut>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <SquareTerminal className="size-4" />
+                    New CLI Session
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-64">
+                    <DropdownMenuLabel>Start Here</DropdownMenuLabel>
+                    {CLI_SESSION_CHOICES.map((choice) => {
+                      const providerAvailable =
+                        providerAvailability[choice.provider];
+                      const requiresTask = choice.contextMode === "active-task";
+                      const disabled =
+                        !providerAvailable ||
+                        (requiresTask && !activeTask) ||
+                        false;
+                      const providerLabel = getCliSessionProviderLabel(
+                        choice.provider,
+                      );
+                      const contextLabel = getCliSessionContextLabel(
+                        choice.contextMode,
+                      );
+                      const secondaryLabel = !providerAvailable
+                        ? `${providerLabel} is unavailable in this environment`
+                        : requiresTask
+                          ? activeTask
+                            ? `Continue from the active task context`
+                            : "Select an active task first"
+                          : "Use the current workspace context";
+                      const taskHint =
+                        requiresTask && activeTask ? activeTask.title : null;
+
+                      return (
+                        <DropdownMenuItem
+                          key={`${choice.provider}:${choice.contextMode}`}
+                          disabled={disabled}
+                          className="items-start"
+                          onSelect={() => {
+                            createCliSessionTab({
+                              provider: choice.provider,
+                              contextMode: choice.contextMode,
+                            });
+                          }}
+                        >
+                          <div className="flex min-w-0 items-start gap-2">
+                            <ModelIcon
+                              providerId={choice.provider}
+                              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium">
+                                {providerLabel} · {contextLabel}
+                              </div>
+                              <div className="mt-0.5 text-xs text-muted-foreground">
+                                {secondaryLabel}
+                              </div>
+                              {taskHint ? (
+                                <div className="mt-0.5 truncate text-xs text-muted-foreground/60">
+                                  {taskHint}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

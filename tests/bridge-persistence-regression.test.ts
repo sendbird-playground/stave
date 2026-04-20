@@ -4886,7 +4886,7 @@ describe("workspace store hydration ordering", () => {
     });
   });
 
-  test("resolveApproval targets the task-owned inactive workspace turn", async () => {
+  test("resolveApproval targets the task-owned inactive workspace turn with trimmed notification task ids", async () => {
     const approvalCalls: Array<{
       turnId: string;
       requestId: string;
@@ -4950,14 +4950,13 @@ describe("workspace store hydration ordering", () => {
           projectName: "stave-project",
           workspaceId: "ws-alt",
           workspaceName: "Alt Workspace",
-          taskId: "task-alt",
+          taskId: " task-alt ",
           taskTitle: "Task Alt",
           turnId: "turn-alt-1",
           providerId: "codex",
           action: {
             type: "approval",
             requestId: "approval-alt-1",
-            messageId: "task-alt-m-1",
           },
           payload: {
             toolName: "bash",
@@ -5059,6 +5058,208 @@ describe("workspace store hydration ordering", () => {
     });
     expect(useAppStore.getState().notifications[0]?.readAt).toBeString();
     expect(useAppStore.getState().messagesByTask["task-main"]).toEqual([]);
+  });
+
+  test("resolveApproval only marks the matching notification when request ids collide across workspaces", async () => {
+    const approvalCalls: Array<{
+      turnId: string;
+      requestId: string;
+      approved: boolean;
+    }> = [];
+
+    setWindowContext({
+      localStorage: createMemoryStorage(),
+      api: {
+        provider: {
+          respondApproval: async (args: {
+            turnId: string;
+            requestId: string;
+            approved: boolean;
+          }) => {
+            approvalCalls.push(args);
+            return { ok: true, message: "ok" };
+          },
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+        "ws-alt": "/tmp/stave-project/.stave/workspaces/alt",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+        "ws-alt": "alt",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+        "ws-alt": false,
+      },
+      tasks: [
+        {
+          id: "task-main",
+          title: "Task Main",
+          provider: "codex",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
+      messagesByTask: { "task-main": [] },
+      notifications: [
+        {
+          id: "notification-approval-main-1",
+          kind: "task.approval_requested",
+          title: "Task Main",
+          body: "Approval requested",
+          projectPath: "/tmp/stave-project",
+          projectName: "stave-project",
+          workspaceId: "ws-main",
+          workspaceName: "Main Workspace",
+          taskId: "task-main",
+          taskTitle: "Task Main",
+          turnId: "turn-main-1",
+          providerId: "codex",
+          action: {
+            type: "approval",
+            requestId: "1",
+            messageId: "task-main-m-1",
+          },
+          payload: {
+            toolName: "bash",
+            description: "Run npm test in main workspace",
+          },
+          createdAt: "2026-04-07T00:00:01.000Z",
+          readAt: null,
+        },
+        {
+          id: "notification-approval-alt-1",
+          kind: "task.approval_requested",
+          title: "Task Alt",
+          body: "Approval requested",
+          projectPath: "/tmp/stave-project",
+          projectName: "stave-project",
+          workspaceId: "ws-alt",
+          workspaceName: "Alt Workspace",
+          taskId: "task-alt",
+          taskTitle: "Task Alt",
+          turnId: "turn-alt-1",
+          providerId: "codex",
+          action: {
+            type: "approval",
+            requestId: "1",
+            messageId: "task-alt-m-1",
+          },
+          payload: {
+            toolName: "bash",
+            description: "Run npm test in alt workspace",
+          },
+          createdAt: "2026-04-07T00:00:00.000Z",
+          readAt: null,
+        },
+      ],
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+      taskWorkspaceIdById: {
+        "task-main": "ws-main",
+        "task-alt": "ws-alt",
+      },
+      workspaceRuntimeCacheById: {
+        "ws-alt": {
+          activeTaskId: "task-alt",
+          tasks: [
+            {
+              id: "task-alt",
+              title: "Task Alt",
+              provider: "codex",
+              updatedAt: "2026-04-07T00:00:00.000Z",
+              unread: false,
+              archivedAt: null,
+            },
+          ],
+          messagesByTask: {
+            "task-alt": [
+              {
+                id: "task-alt-m-1",
+                role: "assistant",
+                model: "gpt-5.4",
+                providerId: "codex",
+                content: "",
+                isStreaming: false,
+                parts: [
+                  {
+                    type: "approval",
+                    toolName: "bash",
+                    requestId: "1",
+                    description: "Run npm test in alt workspace",
+                    state: "approval-requested",
+                  },
+                ],
+              },
+            ],
+          },
+          messageCountByTask: { "task-alt": 1 },
+          promptDraftByTask: {},
+          workspaceInformation: {
+            jiraIssues: [],
+            confluencePages: [],
+            figmaResources: [],
+            linkedPullRequests: [],
+            slackThreads: [],
+            notes: "",
+            todos: [],
+            customFields: [],
+          },
+          editorTabs: [],
+          activeEditorTabId: null,
+          terminalTabs: [],
+          activeTerminalTabId: null,
+          activeTurnIdsByTask: {
+            "task-alt": "turn-alt-1",
+          },
+          providerSessionByTask: {},
+          nativeSessionReadyByTask: {},
+        },
+      },
+    });
+
+    useAppStore.getState().resolveApproval({
+      taskId: "task-alt",
+      messageId: "task-alt-m-1",
+      approved: true,
+    });
+
+    await Bun.sleep(0);
+
+    expect(approvalCalls).toEqual([
+      {
+        turnId: "turn-alt-1",
+        requestId: "1",
+        approved: true,
+      },
+    ]);
+
+    const notifications = useAppStore.getState().notifications;
+    expect(
+      notifications.find(
+        (notification) => notification.id === "notification-approval-alt-1",
+      )?.readAt,
+    ).toBeString();
+    expect(
+      notifications.find(
+        (notification) => notification.id === "notification-approval-main-1",
+      )?.readAt,
+    ).toBeNull();
   });
 
   test("resolveUserInput targets the task-owned inactive workspace turn", async () => {

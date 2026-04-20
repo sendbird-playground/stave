@@ -762,6 +762,7 @@ function logWorkspaceSwitchMetric(args: {
 
 export interface AppSettings {
   appShellMode: AppShellMode;
+  showPresetBar: boolean;
   themeMode: "light" | "dark" | "system";
   /** ID of the active custom theme preset, or `null` for the default. */
   customThemeId: string | null;
@@ -1396,18 +1397,26 @@ function markNotificationReadInList(args: {
 function findUnreadApprovalNotificationIds(args: {
   notifications: AppNotification[];
   taskId: string;
+  messageId: string;
   requestId: string;
 }) {
   return args.notifications.flatMap((notification) => {
-    if (
-      !isNotificationUnread(notification) ||
-      notification.taskId !== args.taskId
-    ) {
+    if (!isNotificationUnread(notification)) {
       return [];
     }
 
     const action = notification.action;
     if (action?.type !== "approval" || action.requestId !== args.requestId) {
+      return [];
+    }
+
+    if (action.messageId) {
+      return action.messageId === args.messageId
+        ? [notification.id]
+        : [];
+    }
+
+    if (notification.taskId?.trim() !== args.taskId.trim()) {
       return [];
     }
 
@@ -1616,7 +1625,8 @@ function showNotificationToast(notification: AppNotification) {
 
 const ARCHIVED_TASK_TURN_NOTICE =
   "Generation stopped because the task was archived before this turn completed.";
-export const STAVE_MUSE_OPEN_SETTINGS_EVENT = "stave:muse-open-settings";
+export const STAVE_OPEN_SETTINGS_EVENT = "stave:open-settings";
+export const STAVE_MUSE_OPEN_SETTINGS_EVENT = STAVE_OPEN_SETTINGS_EVENT;
 const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
   presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 });
@@ -1633,6 +1643,7 @@ function normalizeReasoningExpansionMode(value: unknown): "auto" | "manual" {
 
 const defaultSettings: AppSettings = {
   appShellMode: "stave",
+  showPresetBar: true,
   themeMode: "dark",
   customThemeId: null,
   sidebarArtworkMode: DEFAULT_SIDEBAR_ARTWORK_MODE,
@@ -5927,10 +5938,8 @@ export const useAppStore = create<AppState>()(
           const nextWorkspace =
             state.workspaces.find(
               (item) =>
-                item.id !== workspaceId &&
-                state.workspaceDefaultById[item.id],
-            ) ??
-            state.workspaces.find((item) => item.id !== workspaceId);
+                item.id !== workspaceId && state.workspaceDefaultById[item.id],
+            ) ?? state.workspaces.find((item) => item.id !== workspaceId);
           if (!nextWorkspace) {
             const workspaceState = buildWorkspaceSessionState({
               snapshot: null,
@@ -11407,6 +11416,7 @@ export const useAppStore = create<AppState>()(
             const unreadNotificationIds = findUnreadApprovalNotificationIds({
               notifications: latestState.notifications,
               taskId,
+              messageId,
               requestId,
             });
             if (unreadNotificationIds.length > 0) {
@@ -12448,6 +12458,10 @@ export const useAppStore = create<AppState>()(
           persistedSettings?.appShellMode ??
             (legacyLayoutZenMode ? "zen" : defaultSettings.appShellMode),
         );
+        state.settings.showPresetBar =
+          typeof raw.showPresetBar === "boolean"
+            ? raw.showPresetBar
+            : defaultSettings.showPresetBar;
         state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
           raw.sidebarArtworkMode,
         );

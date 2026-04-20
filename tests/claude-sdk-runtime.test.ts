@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildClaudeApprovalPermissionResult,
+  buildClaudeApprovalTimeoutBridgeEvent,
+  CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS,
+  ClaudeToolDecisionTimeoutError,
   resolveClaudeAgentProgressSummaries,
+  resolveClaudeApprovalDecisionTimeoutMs,
   resolveClaudePermissionModeDecision,
   buildClaudeSystemPrompt,
   buildClaudeUserInputPermissionResult,
@@ -12,6 +16,7 @@ import {
   shouldRedirectClaudePreloadedSkillToolUse,
   shouldDenyClaudeToolInPlanMode,
   SubagentProgressTracker,
+  waitForClaudeToolDecision,
 } from "../electron/providers/claude-sdk-runtime";
 
 const workspaceRoot = "/workspace/stave";
@@ -407,6 +412,59 @@ describe("Claude permission mode decisions", () => {
       toolName: "Bash",
     })).toBe("allow");
   });
+
+  test("auto-allows Claude Code read-only built-in tools in plan mode", () => {
+    for (const toolName of [
+      "Read",
+      "Grep",
+      "Glob",
+      "LS",
+      "NotebookRead",
+      "WebFetch",
+      "WebSearch",
+      "BashOutput",
+      "TodoRead",
+    ]) {
+      expect(resolveClaudePermissionModeDecision({
+        permissionMode: "plan",
+        toolName,
+      })).toBe("allow");
+      expect(shouldAutoAllowClaudeTool({
+        permissionMode: "plan",
+        toolName,
+      })).toBe(true);
+    }
+  });
+
+  test("still prompts for read-only built-in tools outside plan/bypass modes", () => {
+    // In default mode the user explicitly asked to be consulted — Read should
+    // still prompt there.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "default",
+      toolName: "Read",
+    })).toBe("prompt");
+    // In acceptEdits/auto the read-only fast-path is intentionally not taken,
+    // because those modes only relax *mutating* tool approvals; this test pins
+    // the current behaviour so future relaxations are deliberate.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "acceptEdits",
+      toolName: "Read",
+    })).toBe("prompt");
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "auto",
+      toolName: "Read",
+    })).toBe("prompt");
+  });
+
+  test("still prompts for Bash in plan mode so command-level inspection runs", () => {
+    // Bash must keep going through the canUseTool prompt path in plan mode —
+    // the hard-deny check in shouldDenyClaudeToolInPlanMode inspects the
+    // command and we don't want to short-circuit that.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "plan",
+      toolName: "Bash",
+    })).toBe("prompt");
+  });
 });
 
 describe("buildClaudeSystemPrompt", () => {
@@ -562,5 +620,136 @@ describe("SubagentProgressTracker", () => {
   test("returns undefined when no agents have been tracked", () => {
     const tracker = new SubagentProgressTracker();
     expect(tracker.resolveToolUseId({})).toBeUndefined();
+  });
+});
+
+describe("resolveClaudeApprovalDecisionTimeoutMs", () => {
+  test("returns default when env var is unset", () => {
+    expect(resolveClaudeApprovalDecisionTimeoutMs({ envValue: undefined })).toBe(
+      CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS,
+    );
+  });
+
+  test("respects a positive integer env value", () => {
+    expect(
+      resolveClaudeApprovalDecisionTimeoutMs({ envValue: "60000" }),
+    ).toBe(60000);
+  });
+
+  test("falls back for non-numeric or non-positive env values", () => {
+    expect(
+      resolveClaudeApprovalDecisionTimeoutMs({ envValue: "abc" }),
+    ).toBe(CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS);
+    expect(resolveClaudeApprovalDecisionTimeoutMs({ envValue: "0" })).toBe(
+      CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS,
+    );
+    expect(resolveClaudeApprovalDecisionTimeoutMs({ envValue: "-5" })).toBe(
+      CLAUDE_APPROVAL_DECISION_TIMEOUT_DEFAULT_MS,
+    );
+  });
+});
+
+describe("waitForClaudeToolDecision", () => {
+  test("resolves with the responder value and cancels the timeout", async () => {
+    const controller = new AbortController();
+    let resolver: ((value: boolean) => void) | null = null;
+    let cleaned = false;
+    const promise = waitForClaudeToolDecision<boolean>({
+      signal: controller.signal,
+      register: (resolve) => {
+        resolver = resolve;
+        return () => {
+          cleaned = true;
+        };
+      },
+      timeoutMs: 1_000,
+    });
+    // Simulate responder invoking the registered resolver.
+    await Promise.resolve();
+    resolver?.(true);
+    await expect(promise).resolves.toBe(true);
+    // Cleanup is only run on timeout/abort paths; on success we do not call it.
+    expect(cleaned).toBe(false);
+  });
+
+  test("rejects with ClaudeToolDecisionTimeoutError when no responder arrives", async () => {
+    const controller = new AbortController();
+    let cleaned = false;
+    const promise = waitForClaudeToolDecision<boolean>({
+      signal: controller.signal,
+      register: () => () => {
+        cleaned = true;
+      },
+      timeoutMs: 10,
+    });
+    await expect(promise).rejects.toBeInstanceOf(ClaudeToolDecisionTimeoutError);
+    // Cleanup must run so the resolver registry does not leak.
+    expect(cleaned).toBe(true);
+  });
+
+  test("abort beats a pending timeout", async () => {
+    const controller = new AbortController();
+    let cleaned = false;
+    const promise = waitForClaudeToolDecision<boolean>({
+      signal: controller.signal,
+      register: () => () => {
+        cleaned = true;
+      },
+      timeoutMs: 5_000,
+    });
+    controller.abort();
+    await expect(promise).rejects.toThrow(
+      "Claude tool permission request aborted.",
+    );
+    expect(cleaned).toBe(true);
+  });
+
+  test("never times out when timeoutMs is 0", async () => {
+    const controller = new AbortController();
+    let resolver: ((value: boolean) => void) | null = null;
+    const promise = waitForClaudeToolDecision<boolean>({
+      signal: controller.signal,
+      register: (resolve) => {
+        resolver = resolve;
+        return () => {};
+      },
+      timeoutMs: 0,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    resolver?.(false);
+    await expect(promise).resolves.toBe(false);
+  });
+});
+
+describe("buildClaudeApprovalTimeoutBridgeEvent", () => {
+  test("emits a recoverable error event describing the approval timeout", () => {
+    const event = buildClaudeApprovalTimeoutBridgeEvent({
+      kind: "approval",
+      toolName: "Edit",
+      requestId: "req_1",
+      timeoutMs: 45_000,
+    });
+    expect(event.type).toBe("error");
+    if (event.type !== "error") {
+      return;
+    }
+    expect(event.recoverable).toBe(true);
+    expect(event.message).toContain("Edit");
+    expect(event.message).toContain("req_1");
+    expect(event.message).toContain("45s");
+  });
+
+  test("uses 'answer' wording for user_input timeouts", () => {
+    const event = buildClaudeApprovalTimeoutBridgeEvent({
+      kind: "user_input",
+      toolName: "AskUserQuestion",
+      requestId: "req_2",
+      timeoutMs: 30_000,
+    });
+    expect(event.type).toBe("error");
+    if (event.type !== "error") {
+      return;
+    }
+    expect(event.message).toContain("answer");
   });
 });

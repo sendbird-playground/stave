@@ -35,6 +35,18 @@ export const TASK_PRESET_KINDS: readonly TaskPresetKind[] = [
   "cli-session",
 ] as const;
 
+export const TASK_PRESET_SHORTCUT_SLOT_LABELS = [
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+] as const;
+
 /**
  * Default presets seeded on first run. Kept small and opinionated so the bar
  * is immediately useful without configuration.
@@ -153,10 +165,43 @@ export function normalizeTaskPreset(input: Partial<TaskPreset>): TaskPreset {
 }
 
 export function generatePresetId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return `preset-${crypto.randomUUID()}`;
   }
   return `preset-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+}
+
+export function getTaskPresetShortcutLabel(index: number): string | null {
+  return TASK_PRESET_SHORTCUT_SLOT_LABELS[index] ?? null;
+}
+
+export function resolveTaskPresetShortcutSlot(args: {
+  key: string;
+  code?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+}): number | null {
+  if (!args.ctrlKey || args.metaKey || args.altKey || args.shiftKey) {
+    return null;
+  }
+
+  if (typeof args.code === "string") {
+    const digitMatch = args.code.match(/^Digit([1-9])$/);
+    if (digitMatch) {
+      return Number.parseInt(digitMatch[1] ?? "", 10) - 1;
+    }
+  }
+
+  if (/^[1-9]$/.test(args.key)) {
+    return Number.parseInt(args.key, 10) - 1;
+  }
+
+  return null;
 }
 
 function buildDefaultPresetLabel(args: {

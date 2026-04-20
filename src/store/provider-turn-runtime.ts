@@ -40,7 +40,15 @@ export function runProviderTurn(args: {
       });
     } finally {
       if (!emittedDoneEvent) {
-        args.onEvent({ event: { type: "done" } });
+        // Tag the synthesized done with stop_reason="aborted" so replay can
+        // distinguish abnormal terminations from natural completion. The
+        // downstream `appendProviderEventToAssistant` done handler interrupts
+        // any dangling pending approval/user_input parts so `isTurnActive`
+        // clears cleanly — otherwise the PlanViewer's Approve/Revise controls
+        // and the chat input stay locked waiting for an orphaned request.
+        args.onEvent({
+          event: { type: "done", stop_reason: "aborted" },
+        });
       }
     }
   })();
