@@ -12,6 +12,7 @@ export interface LayoutState {
   sidebarOverlayTab: RightRailPanelId;
   terminalDocked: boolean;
   editorDiffMode: boolean;
+  editorMarkdownPreviewMode: boolean;
 }
 
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 290;
@@ -43,6 +44,7 @@ export function normalizeLayoutState(layout: LayoutState): LayoutState {
   return {
     ...rest,
     editorPanelWidth: Math.max(MIN_EDITOR_PANEL_WIDTH, layout.editorPanelWidth),
+    editorMarkdownPreviewMode: Boolean(layout.editorMarkdownPreviewMode),
     sidebarOverlayTab: RIGHT_RAIL_PANEL_IDS.includes(layout.sidebarOverlayTab)
       ? layout.sidebarOverlayTab
       : "explorer",

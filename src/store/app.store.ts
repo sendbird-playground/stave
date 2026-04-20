@@ -1276,6 +1276,7 @@ interface AppState {
   fetchAllWorkspacePrStatuses: () => Promise<void>;
   setLayout: (args: { patch: Partial<LayoutState> }) => void;
   toggleEditorDiffMode: () => void;
+  toggleEditorMarkdownPreviewMode: () => void;
   openWorkspacePicker: () => Promise<void>;
   refreshProjectFiles: () => Promise<void>;
   refreshProviderAvailability: () => Promise<void>;
@@ -3452,6 +3453,7 @@ export const useAppStore = create<AppState>()(
                 editorTabs: initialWorkspaceState.editorTabs,
                 activeEditorTabId: initialWorkspaceState.activeEditorTabId,
               }),
+              editorMarkdownPreviewMode: false,
             },
           }));
           await get().hydrateWorkspaces();
@@ -3576,6 +3578,7 @@ export const useAppStore = create<AppState>()(
               editorTabs: workspaceState.editorTabs,
               activeEditorTabId: workspaceState.activeEditorTabId,
             }),
+            editorMarkdownPreviewMode: false,
           },
           projectName: args.projectName,
           projectFiles: args.files,
@@ -4286,6 +4289,7 @@ export const useAppStore = create<AppState>()(
           sidebarOverlayTab: "explorer",
           terminalDocked: false,
           editorDiffMode: false,
+          editorMarkdownPreviewMode: false,
         },
         settings: defaultSettings,
         editorTabs: [],
@@ -4883,6 +4887,7 @@ export const useAppStore = create<AppState>()(
                   editorTabs: workspaceState.editorTabs,
                   activeEditorTabId: workspaceState.activeEditorTabId,
                 }),
+                editorMarkdownPreviewMode: false,
               },
             };
           });
@@ -6168,6 +6173,7 @@ export const useAppStore = create<AppState>()(
                     editorTabs: workspaceState.editorTabs,
                     activeEditorTabId: workspaceState.activeEditorTabId,
                   }),
+                  editorMarkdownPreviewMode: false,
                 },
               };
             });
@@ -6321,6 +6327,7 @@ export const useAppStore = create<AppState>()(
                   editorTabs: workspaceState.editorTabs,
                   activeEditorTabId: workspaceState.activeEditorTabId,
                 }),
+                editorMarkdownPreviewMode: false,
               },
               projectFiles: cachedFiles,
             };
@@ -8275,12 +8282,44 @@ export const useAppStore = create<AppState>()(
             };
           }),
         toggleEditorDiffMode: () =>
-          set((state) => ({
-            layout: {
-              ...state.layout,
-              editorDiffMode: !state.layout.editorDiffMode,
-            },
-          })),
+          set((state) => {
+            const nextEditorDiffMode = !state.layout.editorDiffMode;
+            return {
+              layout: {
+                ...state.layout,
+                editorDiffMode: nextEditorDiffMode,
+                // Diff and markdown preview are mutually exclusive views.
+                editorMarkdownPreviewMode: nextEditorDiffMode
+                  ? false
+                  : state.layout.editorMarkdownPreviewMode,
+              },
+            };
+          }),
+        toggleEditorMarkdownPreviewMode: () =>
+          set((state) => {
+            const activeTab = state.editorTabs.find(
+              (tab) => tab.id === state.activeEditorTabId,
+            );
+            const activeTabIsMarkdown = Boolean(
+              activeTab &&
+              activeTab.kind !== "image" &&
+              activeTab.language === "markdown",
+            );
+            if (!activeTabIsMarkdown) {
+              return {};
+            }
+            const nextPreviewMode = !state.layout.editorMarkdownPreviewMode;
+            return {
+              layout: {
+                ...state.layout,
+                editorMarkdownPreviewMode: nextPreviewMode,
+                // Diff and markdown preview are mutually exclusive views.
+                editorDiffMode: nextPreviewMode
+                  ? false
+                  : state.layout.editorDiffMode,
+              },
+            };
+          }),
         openWorkspacePicker: async () => {
           const root = await workspaceFsAdapter.pickRoot();
           if (!root) {
@@ -12762,6 +12801,7 @@ export const useAppStore = create<AppState>()(
                   ...state.layout,
                   editorVisible: true,
                   editorDiffMode: true,
+                  editorMarkdownPreviewMode: false,
                 },
                 workspaceSnapshotVersion:
                   shouldRefreshExisting ||
@@ -12792,6 +12832,7 @@ export const useAppStore = create<AppState>()(
                 ...state.layout,
                 editorVisible: true,
                 editorDiffMode: true,
+                editorMarkdownPreviewMode: false,
               },
               workspaceSnapshotVersion:
                 incrementWorkspaceSnapshotVersion(state),
@@ -12946,6 +12987,9 @@ export const useAppStore = create<AppState>()(
               layout: {
                 ...state.layout,
                 editorDiffMode: isDiffTab,
+                editorMarkdownPreviewMode: isDiffTab
+                  ? false
+                  : state.layout.editorMarkdownPreviewMode,
               },
               workspaceSnapshotVersion:
                 incrementWorkspaceSnapshotVersion(state),
@@ -13004,6 +13048,7 @@ export const useAppStore = create<AppState>()(
                   ...state.layout,
                   editorVisible: false,
                   editorDiffMode: false,
+                  editorMarkdownPreviewMode: false,
                 },
                 workspaceSnapshotVersion:
                   incrementWorkspaceSnapshotVersion(state),
@@ -13030,6 +13075,9 @@ export const useAppStore = create<AppState>()(
               layout: {
                 ...state.layout,
                 editorDiffMode: isDiffTab,
+                editorMarkdownPreviewMode: isDiffTab
+                  ? false
+                  : state.layout.editorMarkdownPreviewMode,
               },
               workspaceSnapshotVersion:
                 incrementWorkspaceSnapshotVersion(state),
