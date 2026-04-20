@@ -10,6 +10,8 @@ import {
 } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
+import { ColiseumArenaPanel } from "@/components/session/ColiseumArenaPanel";
+import { ColiseumLauncherDialog } from "@/components/session/ColiseumLauncherDialog";
 import {
   resolveChatAreaViewMode,
   resolveHydratingProjectCopy,
@@ -46,9 +48,11 @@ function ChatAreaImpl() {
     hasAnyWorkspace,
     hasSelectedWorkspace,
     hasSelectedTask,
+    activeTaskId,
     activeTaskMessageCount,
     activeTask,
     activeTurnId,
+    activeColiseum,
     persistenceBootstrapPhase,
     persistenceBootstrapMessage,
     refreshActiveManagedTask,
@@ -67,12 +71,14 @@ function ChatAreaImpl() {
           state.tasks.some(
             (task) => task.id === state.activeTaskId && !isTaskArchived(task),
           ),
+          state.activeTaskId,
           state.messageCountByTask[state.activeTaskId] ??
             (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
           state.tasks.find(
             (task) => task.id === state.activeTaskId && !isTaskArchived(task),
           ) ?? null,
           state.activeTurnIdsByTask[state.activeTaskId],
+          state.activeColiseumsByTask[state.activeTaskId] ?? null,
           state.persistenceBootstrapPhase,
           state.persistenceBootstrapMessage,
           state.refreshActiveManagedTask,
@@ -262,6 +268,29 @@ function ChatAreaImpl() {
     );
   }
 
+  // When the active task has a live Coliseum group, switch the whole session
+  // area to the arena layout: PlanViewer, ChatInput, and the normal ChatPanel
+  // are all hidden because branches carry their own ephemeral state and the
+  // prompt is already locked in. Once the user promotes a champion (or
+  // dismisses), the group clears from `activeColiseumsByTask` and we fall back
+  // to the default layout on the next render.
+  if (activeColiseum) {
+    return (
+      <div {...sessionAreaProps}>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <RenderProfiler id="ColiseumArenaPanel" thresholdMs={8}>
+            <ColiseumArenaPanel parentTaskId={activeTaskId} />
+          </RenderProfiler>
+        </div>
+      </div>
+    );
+  }
+
+  const canStartColiseum = activeTask != null && !activeTurnId;
+  const coliseumDisabledReason = activeTurnId
+    ? "Wait for the current turn to finish before starting a Coliseum."
+    : undefined;
+
   return (
     <div {...sessionAreaProps}>
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -273,6 +302,16 @@ function ChatAreaImpl() {
         </RenderProfiler>
         <TodoFloater inputDockHeight={chatInputDockHeight} />
         <div ref={chatInputDockRef} className="relative z-30 shrink-0">
+          {activeTask ? (
+            <div className="flex items-center justify-end border-t border-border/50 bg-background/60 px-3 py-1 supports-backdrop-filter:backdrop-blur-xs">
+              <ColiseumLauncherDialog
+                parentTaskId={activeTaskId}
+                defaultProviderId={activeTask.provider}
+                disabled={!canStartColiseum}
+                disabledReason={coliseumDisabledReason}
+              />
+            </div>
+          ) : null}
           <RenderProfiler id="ChatInput" thresholdMs={8}>
             <ChatInput />
           </RenderProfiler>

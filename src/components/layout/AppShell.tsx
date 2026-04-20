@@ -29,7 +29,7 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { QuitConfirmationDialog } from "@/components/layout/QuitConfirmationDialog";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
-import { isTaskArchived } from "@/lib/tasks";
+import { isColiseumBranch, isTaskArchived } from "@/lib/tasks";
 import { resolveTaskPresetShortcutSlot } from "@/lib/task-presets";
 import { RenderProfiler } from "@/lib/render-profiler";
 import {
@@ -1015,13 +1015,17 @@ export function AppShell() {
           ...remembered,
         ];
       })(),
-      tasks: tasks.map((task) => ({
-        id: task.id,
-        isActive: task.id === activeTaskId,
-        isResponding: Boolean(activeTurnIdsByTask[task.id]),
-        provider: task.provider,
-        title: task.title,
-      })),
+      tasks: tasks
+        // Coliseum branches are ephemeral fan-out children — never expose
+        // them as individually switchable tasks in the command palette.
+        .filter((task) => !isColiseumBranch(task))
+        .map((task) => ({
+          id: task.id,
+          isActive: task.id === activeTaskId,
+          isResponding: Boolean(activeTurnIdsByTask[task.id]),
+          provider: task.provider,
+          title: task.title,
+        })),
       workspacePath: activeWorkspacePath ?? null,
       workspaces: workspaces.map((workspace) => ({
         id: workspace.id,

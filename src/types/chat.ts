@@ -242,6 +242,34 @@ export interface Task {
   controlOwner: TaskControlOwner;
   /** Legacy relative paths to persisted plan files kept for snapshot compatibility. */
   planFilePaths?: string[];
+  /**
+   * If set, this task is an ephemeral Coliseum branch of the referenced parent
+   * task. Branch tasks are hidden from task trees/tabs and reaped when the user
+   * picks a champion, dismisses the Coliseum, or the workspace reloads with a
+   * stale branch still present. Never set on the parent task itself.
+   */
+  coliseumParentTaskId?: string | null;
+}
+
+/**
+ * Runtime-only state for a Coliseum — a multi-model parallel turn. Keyed in
+ * the store by the parent task id. Not persisted — orphaned branch tasks are
+ * reaped on workspace bootstrap if their parent's group is gone.
+ */
+export interface ColiseumGroupState {
+  parentTaskId: string;
+  branchTaskIds: string[];
+  createdAt: string;
+  /**
+   * Number of messages in the parent task at fan-out time. Each branch's
+   * `messagesByTask[childTaskId]` begins with exactly this many parent messages
+   * copied verbatim; everything from index `parentMessageCountAtFanout` onward
+   * is the branch's own user message + streaming assistant response.
+   *
+   * Used by `pickColiseumChampion` to compute the champion-only diff to graft
+   * onto the parent.
+   */
+  parentMessageCountAtFanout: number;
 }
 
 export interface EditorTab {

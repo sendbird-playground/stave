@@ -20,6 +20,17 @@ export function isTaskArchived(task: Pick<Task, "archivedAt">) {
   return Boolean(task.archivedAt);
 }
 
+/**
+ * True when the task is an ephemeral Coliseum branch. Branch tasks are hidden
+ * from every task-tree surface (sidebar, tabs, counts, search, archive fallback,
+ * responding-task hover preview) by default. Callers that need to iterate every
+ * task in the workspace (abort-all on switch, orphan reaper) can opt in via
+ * `includeColiseumBranches`.
+ */
+export function isColiseumBranch(task: Pick<Task, "coliseumParentTaskId">) {
+  return Boolean(task.coliseumParentTaskId);
+}
+
 export function getTaskControlMode(task: Pick<Task, "controlMode"> | null | undefined): TaskControlMode {
   return task?.controlMode ?? "interactive";
 }
@@ -71,8 +82,22 @@ function matchesTaskFilter(args: { task: Pick<Task, "archivedAt">; filter: TaskF
   return args.filter === "archived" ? isTaskArchived(args.task) : !isTaskArchived(args.task);
 }
 
-export function getVisibleTasks(args: { tasks: Task[]; filter: TaskFilter }) {
-  return args.tasks.filter((task) => matchesTaskFilter({ task, filter: args.filter }));
+export function getVisibleTasks(args: {
+  tasks: Task[];
+  filter: TaskFilter;
+  /**
+   * When true, include Coliseum branch children. Branches are hidden by default
+   * from all standard task-tree surfaces; callers that need to iterate every
+   * task (e.g. abort-all, orphan reaper) can opt in.
+   */
+  includeColiseumBranches?: boolean;
+}) {
+  return args.tasks.filter((task) => {
+    if (!args.includeColiseumBranches && isColiseumBranch(task)) {
+      return false;
+    }
+    return matchesTaskFilter({ task, filter: args.filter });
+  });
 }
 
 function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
@@ -123,22 +148,24 @@ export function reorderTasksWithinFilter(args: {
   });
 }
 
-export function getTaskCounts(args: { tasks: Array<Pick<Task, "archivedAt">> }) {
-  const archived = args.tasks.filter((task) => isTaskArchived(task)).length;
+export function getTaskCounts(args: { tasks: Array<Pick<Task, "archivedAt" | "coliseumParentTaskId">> }) {
+  const visible = args.tasks.filter((task) => !isColiseumBranch(task));
+  const archived = visible.filter((task) => isTaskArchived(task)).length;
   return {
-    active: args.tasks.length - archived,
+    active: visible.length - archived,
     archived,
-    all: args.tasks.length,
+    all: visible.length,
   };
 }
 
 export function filterTasksByName(args: { tasks: Task[]; query: string }) {
+  const visibleTasks = args.tasks.filter((task) => !isColiseumBranch(task));
   const trimmed = args.query.trim();
   if (!trimmed) {
-    return args.tasks;
+    return visibleTasks;
   }
   const lower = trimmed.toLowerCase();
-  return args.tasks.filter((task) => task.title.toLowerCase().includes(lower));
+  return visibleTasks.filter((task) => task.title.toLowerCase().includes(lower));
 }
 
 export function normalizeSuggestedTaskTitle(args: { title: string }) {
@@ -177,15 +204,21 @@ export function normalizeSuggestedTaskTitle(args: { title: string }) {
 }
 
 export function getArchiveFallbackTaskId(args: { tasks: Task[]; archivedTaskId: string }) {
-  const activeFallback = args.tasks.find((task) => task.id !== args.archivedTaskId && !isTaskArchived(task));
+  const activeFallback = args.tasks.find(
+    (task) =>
+      task.id !== args.archivedTaskId && !isTaskArchived(task) && !isColiseumBranch(task),
+  );
   return activeFallback?.id ?? "";
 }
 
-export function getRespondingTasks<T extends Pick<Task, "id" | "archivedAt">>(args: {
+export function getRespondingTasks<T extends Pick<Task, "id" | "archivedAt" | "coliseumParentTaskId">>(args: {
   tasks: T[];
   activeTurnIdsByTask: Record<string, string | undefined>;
 }) {
-  return args.tasks.filter((task) => !isTaskArchived(task) && Boolean(args.activeTurnIdsByTask[task.id]));
+  return args.tasks.filter(
+    (task) =>
+      !isTaskArchived(task) && !isColiseumBranch(task) && Boolean(args.activeTurnIdsByTask[task.id]),
+  );
 }
 
 export function getRespondingProviderId(args: {
