@@ -3,9 +3,7 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
-  useState,
   type MouseEvent,
 } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
@@ -38,8 +36,6 @@ const EMPTY_MESSAGES: readonly unknown[] = [];
 export const ChatArea = memo(ChatAreaImpl);
 
 function ChatAreaImpl() {
-  const chatInputDockRef = useRef<HTMLDivElement | null>(null);
-  const [chatInputDockHeight, setChatInputDockHeight] = useState(0);
   const sessionAreaRef = useRef<HTMLDivElement>(null);
   const [
     projectPath,
@@ -98,7 +94,6 @@ function ChatAreaImpl() {
     persistenceBootstrapPhase,
     persistenceBootstrapMessage,
   });
-  const isEmpty = activeTaskMessageCount === 0;
   const shouldPollManagedTask =
     isTaskManaged(activeTask) && Boolean(activeTurnId);
 
@@ -112,36 +107,6 @@ function ChatAreaImpl() {
     }, 3000);
     return () => window.clearInterval(handle);
   }, [refreshActiveManagedTask, shouldPollManagedTask]);
-
-  useLayoutEffect(() => {
-    if (isEmpty) {
-      setChatInputDockHeight(0);
-      return;
-    }
-
-    const node = chatInputDockRef.current;
-    if (!node) {
-      return;
-    }
-
-    const syncHeight = () => {
-      const nextHeight = node.offsetHeight;
-      setChatInputDockHeight((currentHeight) =>
-        currentHeight === nextHeight ? currentHeight : nextHeight,
-      );
-    };
-
-    syncHeight();
-
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => syncHeight());
-    observer.observe(node);
-
-    return () => observer.disconnect();
-  }, [isEmpty]);
 
   const handleSessionAreaMouseDownCapture = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -272,7 +237,7 @@ function ChatAreaImpl() {
               />
             </div>
           </div>
-          <div ref={chatInputDockRef} className="relative z-30 shrink-0">
+          <div className="relative z-30 shrink-0">
             <RenderProfiler id="ChatInput" thresholdMs={8}>
               <ChatInput />
             </RenderProfiler>
@@ -285,14 +250,21 @@ function ChatAreaImpl() {
   return (
     <div {...sessionAreaProps}>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <RenderProfiler id="ChatPanel" thresholdMs={8}>
-          <ChatPanel />
-        </RenderProfiler>
-        <RenderProfiler id="PlanViewer">
-          <PlanViewer inputDockHeight={chatInputDockHeight} />
-        </RenderProfiler>
-        <TodoFloater inputDockHeight={chatInputDockHeight} />
-        <div ref={chatInputDockRef} className="relative z-30 shrink-0">
+        <div className="relative min-h-0 flex-1">
+          <RenderProfiler id="ChatPanel" thresholdMs={8}>
+            <ChatPanel />
+          </RenderProfiler>
+          <div className="pointer-events-none absolute inset-0">
+            {/* Keep floating plan/todo cards inside the message pane so they are
+                structurally separated from the input dock without measuring
+                dock height changes frame-by-frame. */}
+            <RenderProfiler id="PlanViewer">
+              <PlanViewer />
+            </RenderProfiler>
+            <TodoFloater />
+          </div>
+        </div>
+        <div className="relative z-30 shrink-0">
           <RenderProfiler id="ChatInput" thresholdMs={8}>
             <ChatInput />
           </RenderProfiler>

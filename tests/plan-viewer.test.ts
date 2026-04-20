@@ -374,29 +374,27 @@ describe("resolvePlanViewerState", () => {
 });
 
 describe("resolvePlanViewerInsets", () => {
-  test("anchors the viewer above the chat input dock in normal mode", () => {
+  test("anchors the viewer to the message pane floor in normal mode", () => {
     expect(
       resolvePlanViewerInsets({
         isExpanded: false,
-        inputDockHeight: 76,
       }),
     ).toEqual({
       topOffset: null,
       rightOffset: 16,
-      bottomOffset: 84,
+      bottomOffset: 8,
     });
   });
 
-  test("keeps expanded mode pinned to the full chat viewport above the input dock", () => {
+  test("keeps expanded mode pinned to the full message pane height", () => {
     expect(
       resolvePlanViewerInsets({
         isExpanded: true,
-        inputDockHeight: 76,
       }),
     ).toEqual({
       topOffset: 12,
       rightOffset: 16,
-      bottomOffset: 84,
+      bottomOffset: 8,
     });
   });
 });
@@ -462,13 +460,12 @@ describe("resolvePlanViewerLayout", () => {
     expect(
       resolvePlanViewerLayout({
         viewState: "normal",
-        inputDockHeight: 76,
       }),
     ).toEqual({
-      wrapperClassName: "pointer-events-none absolute z-[25]",
+      wrapperClassName: "pointer-events-none absolute z-[35]",
       wrapperStyle: {
         right: 16,
-        bottom: 84,
+        bottom: 8,
         width: "calc(100% - 32px)",
         maxWidth: 672,
       },
@@ -477,19 +474,18 @@ describe("resolvePlanViewerLayout", () => {
     });
   });
 
-  test("anchors the expanded viewer to the same bottom-right origin above the input dock", () => {
+  test("anchors the expanded viewer to the same bottom-right origin inside the message pane", () => {
     expect(
       resolvePlanViewerLayout({
         viewState: "expanded",
-        inputDockHeight: 76,
       }),
     ).toEqual({
-      wrapperClassName: "pointer-events-none absolute z-[25]",
+      wrapperClassName: "pointer-events-none absolute z-[35]",
       wrapperStyle: {
         right: 16,
-        bottom: 84,
+        bottom: 8,
         width: "calc(100% - 32px)",
-        height: "max(0px, calc(100% - 96px))",
+        height: "max(0px, calc(100% - 20px))",
       },
       cardClassName:
         "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg h-full w-full",
@@ -500,14 +496,13 @@ describe("resolvePlanViewerLayout", () => {
     expect(
       resolvePlanViewerLayout({
         viewState: "minimized",
-        inputDockHeight: 76,
         dragPos: {
           x: 120,
           y: 48,
         },
       }),
     ).toEqual({
-      wrapperClassName: "pointer-events-none absolute z-[25]",
+      wrapperClassName: "pointer-events-none absolute z-[35]",
       wrapperStyle: {
         top: 48,
         left: 120,

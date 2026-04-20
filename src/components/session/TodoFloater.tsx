@@ -23,11 +23,7 @@ const COMPLETION_LINGER_MS = 2000;
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 
-interface TodoFloaterProps {
-  inputDockHeight?: number;
-}
-
-export function TodoFloater({ inputDockHeight = 0 }: TodoFloaterProps) {
+export function TodoFloater() {
   const [
     activeTask,
     draftProvider,
@@ -151,7 +147,6 @@ export function TodoFloater({ inputDockHeight = 0 }: TodoFloaterProps) {
 
   const { rightOffset, bottomOffset } = resolvePlanViewerInsets({
     isExpanded: false,
-    inputDockHeight,
   });
   const progressPercent =
     progress.totalCount > 0
@@ -162,7 +157,7 @@ export function TodoFloater({ inputDockHeight = 0 }: TodoFloaterProps) {
     <div
       className={cn(
         SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME,
-        // Anchor todo progress in the same slot the plan viewer uses above the chat input.
+        // Anchor todo progress in the same session-edge slot the plan viewer uses.
         "transition-opacity duration-300",
         lingering ? "opacity-50" : "opacity-100 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2",
       )}
