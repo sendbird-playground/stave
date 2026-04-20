@@ -84,6 +84,9 @@ function shouldIncludeSystemEvent(part: SystemEventPart) {
   if (isCodeDiffSummarySystemEvent(part.content)) {
     return false;
   }
+  if (normalized.startsWith("sending request to model")) {
+    return false;
+  }
   return !isSubagentProgressSystemEvent(part.content);
 }
 
