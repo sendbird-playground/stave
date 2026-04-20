@@ -1349,6 +1349,8 @@ function markNotificationReadInList(args: {
 
 function findUnreadApprovalNotificationIds(args: {
   notifications: AppNotification[];
+  taskId: string;
+  messageId: string;
   requestId: string;
 }) {
   return args.notifications.flatMap((notification) => {
@@ -1358,6 +1360,16 @@ function findUnreadApprovalNotificationIds(args: {
 
     const action = notification.action;
     if (action?.type !== "approval" || action.requestId !== args.requestId) {
+      return [];
+    }
+
+    if (action.messageId) {
+      return action.messageId === args.messageId
+        ? [notification.id]
+        : [];
+    }
+
+    if (notification.taskId?.trim() !== args.taskId.trim()) {
       return [];
     }
 
@@ -10428,6 +10440,8 @@ export const useAppStore = create<AppState>()(
             const latestState = get();
             const unreadNotificationIds = findUnreadApprovalNotificationIds({
               notifications: latestState.notifications,
+              taskId,
+              messageId,
               requestId,
             });
             if (unreadNotificationIds.length > 0) {
