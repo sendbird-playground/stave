@@ -4,6 +4,10 @@ import { useShallow } from "zustand/react/shallow";
 import { Message, MessageContent, ModelIcon } from "@/components/ai-elements";
 import { ProviderModelPicker } from "@/components/session/ProviderModelPicker";
 import {
+  getColiseumDefaultModelForProvider,
+  resolveColiseumInitialModel,
+} from "@/components/session/coliseum-launcher-dialog.utils";
+import {
   getLatestRenderableAssistantMessage,
   getMessageScrollFingerprint,
 } from "@/components/session/chat-panel.utils";
@@ -19,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui";
 import {
-  getDefaultModelForProvider,
   getProviderLabel,
   toHumanModelName,
 } from "@/lib/providers/model-catalog";
@@ -70,9 +73,10 @@ export function ColiseumReviewerDialog(props: ColiseumReviewerDialogProps) {
   const reviewerRunning = reviewerVerdict?.status === "running";
   const reviewerError = reviewerVerdict?.status === "error";
   const defaultProvider: ProviderId = props.defaultProvider ?? "claude-code";
-  const defaultModel =
-    props.defaultModel
-    ?? getDefaultModelForProvider({ providerId: defaultProvider });
+  const defaultModel = resolveColiseumInitialModel({
+    providerId: defaultProvider,
+    preferredModel: props.defaultModel,
+  });
 
   const [provider, setProvider] = useState<ProviderId>(defaultProvider);
   const [model, setModel] = useState<string>(defaultModel);
@@ -88,13 +92,9 @@ export function ColiseumReviewerDialog(props: ColiseumReviewerDialogProps) {
 
   const providerAvailable = providerAvailability[provider] !== false;
   const canSubmit =
-    Boolean(group)
-    && !submitting
-    && !reviewerRunning
-    && providerAvailable;
+    Boolean(group) && !submitting && !reviewerRunning && providerAvailable;
   const canDraftMergedAnswer =
-    Boolean(group)
-    && reviewerVerdict?.status === "complete";
+    Boolean(group) && reviewerVerdict?.status === "complete";
 
   const latestReviewerAssistant = useMemo(
     () => getLatestRenderableAssistantMessage(reviewerMessages),
@@ -328,7 +328,9 @@ export function ColiseumReviewerDialog(props: ColiseumReviewerDialogProps) {
                   selectedModel={model}
                   onProviderChange={(next) => {
                     setProvider(next);
-                    setModel(getDefaultModelForProvider({ providerId: next }));
+                    setModel(
+                      getColiseumDefaultModelForProvider({ providerId: next }),
+                    );
                   }}
                   onModelChange={setModel}
                   providerAvailable={providerAvailable}

@@ -1,3 +1,8 @@
+import {
+  DEFAULT_CLAUDE_OPUS_MODEL,
+  getDefaultModelForProvider,
+} from "@/lib/providers/model-catalog";
+import type { ProviderId } from "@/lib/providers/provider.types";
 import { resolveLanguage } from "@/store/editor.utils";
 
 export interface ColiseumAttachmentFileContext {
@@ -12,6 +17,26 @@ export interface ColiseumAttachmentEditorTabSnapshot {
   content: string;
   language: string;
   kind?: "text" | "image";
+}
+
+export function resolveColiseumInitialModel(args: {
+  providerId: ProviderId;
+  preferredModel?: string;
+}) {
+  if (args.providerId === "claude-code") {
+    return DEFAULT_CLAUDE_OPUS_MODEL;
+  }
+  const preferredModel = args.preferredModel?.trim();
+  if (preferredModel) {
+    return preferredModel;
+  }
+  return getDefaultModelForProvider({ providerId: args.providerId });
+}
+
+export function getColiseumDefaultModelForProvider(args: {
+  providerId: ProviderId;
+}) {
+  return resolveColiseumInitialModel({ providerId: args.providerId });
 }
 
 export async function resolveColiseumAttachmentFileContexts(args: {

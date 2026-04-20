@@ -28,14 +28,13 @@ import {
 } from "@/components/ui";
 import { ProviderModelPicker } from "@/components/session/ProviderModelPicker";
 import {
+  getColiseumDefaultModelForProvider,
   isColiseumSubmitShortcut,
   mergeColiseumAttachedFilePaths,
+  resolveColiseumInitialModel,
   resolveColiseumAttachmentFileContexts,
 } from "@/components/session/coliseum-launcher-dialog.utils";
-import {
-  getDefaultModelForProvider,
-  listProviderIds,
-} from "@/lib/providers/model-catalog";
+import { listProviderIds } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -78,12 +77,14 @@ function makeDefaultBranches(args: {
   defaultModel?: string;
 }): BranchDraft[] {
   const primaryProvider: ProviderId = args.defaultProviderId ?? "claude-code";
-  const primaryModel =
-    args.defaultModel ?? getDefaultModelForProvider({ providerId: primaryProvider });
+  const primaryModel = resolveColiseumInitialModel({
+    providerId: primaryProvider,
+    preferredModel: args.defaultModel,
+  });
   // Pick a distinct second entrant so the contest actually compares something.
   const secondaryProvider: ProviderId =
     primaryProvider === "codex" ? "claude-code" : "codex";
-  const secondaryModel = getDefaultModelForProvider({
+  const secondaryModel = getColiseumDefaultModelForProvider({
     providerId: secondaryProvider,
   });
   return [
@@ -185,7 +186,9 @@ export function ColiseumLauncherDialog(args: ColiseumLauncherDialogProps) {
       {
         id: crypto.randomUUID(),
         provider: nextProvider,
-        model: getDefaultModelForProvider({ providerId: nextProvider }),
+        model: getColiseumDefaultModelForProvider({
+          providerId: nextProvider,
+        }),
       },
     ]);
   };
@@ -202,7 +205,9 @@ export function ColiseumLauncherDialog(args: ColiseumLauncherDialogProps) {
           ? {
               ...branch,
               provider,
-              model: getDefaultModelForProvider({ providerId: provider }),
+              model: getColiseumDefaultModelForProvider({
+                providerId: provider,
+              }),
             }
           : branch,
       ),
