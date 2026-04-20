@@ -1,4 +1,5 @@
 import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
+import { Swords } from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -7,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import {
   buildModelSelectorOptions,
@@ -16,7 +18,8 @@ import {
 } from "@/components/ai-elements/model-selector";
 import type { PromptInputProviderModeStatus } from "@/components/ai-elements/prompt-input-provider-mode";
 import type { PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
-import { Badge, Kbd, toast } from "@/components/ui";
+import { ColiseumLauncherDialog } from "@/components/session/ColiseumLauncherDialog";
+import { Badge, Button, Kbd, toast } from "@/components/ui";
 import {
   buildCommandPaletteItems,
   type CommandPaletteItem,
@@ -185,6 +188,7 @@ interface ChatInputComposerProps {
   onThinkingModeChange?: (value: "adaptive" | "enabled" | "disabled") => void;
   onProviderModeSelect?: (presetId: ProviderModePresetId) => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
+  coliseumAction?: ReactNode;
   crossReviewProvider?: "claude-code" | "codex" | null;
   onCrossReview?: (args: { instructions?: string }) => void;
 }
@@ -832,6 +836,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           onAttachmentsChange={({ attachments }) =>
             updateNonTextPromptDraft({ attachments })
           }
+          leadingToolbarAction={args.coliseumAction}
           crossReviewProvider={args.crossReviewProvider}
           onCrossReview={args.onCrossReview}
           onFocus={() => setStaveMuseOpen({ open: false })}
@@ -919,6 +924,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     updatePromptDraft,
     clearTaskProviderSession,
     abortTaskTurn,
+    restoreColiseum,
     updateSettings,
     refreshSkillCatalog,
     sendUserMessage,
@@ -933,6 +939,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.updatePromptDraft,
           state.clearTaskProviderSession,
           state.abortTaskTurn,
+          state.restoreColiseum,
           state.updateSettings,
           state.refreshSkillCatalog,
           state.sendUserMessage,
@@ -944,6 +951,9 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       state.tasks.find(
         (task) => task.id === state.activeTaskId && !isTaskArchived(task),
       ) ?? null,
+  );
+  const activeColiseum = useAppStore(
+    (state) => state.activeColiseumsByTask[state.activeTaskId] ?? null,
   );
   const draftProvider = useAppStore((state) => state.draftProvider);
   const activeProvider = activeTask?.provider ?? draftProvider;
@@ -1146,6 +1156,73 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
             fallbackModel: modelCodex,
           });
   const activeProviderAvailable = providerAvailability[activeProvider];
+  const coliseumAction = useMemo(() => {
+    if (!activeTaskId || !activeTask) {
+      return null;
+    }
+
+    if (activeColiseum?.minimized) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-8 gap-2 px-3 text-muted-foreground hover:bg-secondary/30 hover:text-foreground",
+            args.compact && "h-8 gap-1.5 px-2.5 text-xs",
+          )}
+          onClick={() => restoreColiseum({ parentTaskId: activeTaskId })}
+          aria-label="Reopen Coliseum arena"
+          title="Reopen the paused Coliseum arena"
+        >
+          <Swords className="size-3.5" />
+          <span>Reopen arena</span>
+        </Button>
+      );
+    }
+
+    const disabledReason = isTaskManaged(activeTask)
+      ? "This task is managed externally."
+      : isTurnActive
+        ? "Wait for the current turn to finish before starting a Coliseum."
+        : undefined;
+
+    return (
+      <ColiseumLauncherDialog
+        parentTaskId={activeTaskId}
+        defaultProviderId={activeProvider}
+        defaultModel={activeModel}
+        disabled={Boolean(disabledReason)}
+        disabledReason={disabledReason}
+        tooltipSide="top"
+        renderTrigger={({ disabled }) => (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-8 gap-2 px-3 text-muted-foreground hover:bg-secondary/30 hover:text-foreground",
+              args.compact && "h-8 gap-1.5 px-2.5 text-xs",
+            )}
+            disabled={disabled}
+            aria-label="Open Coliseum"
+          >
+            <Swords className="size-3.5" />
+            <span>Coliseum</span>
+          </Button>
+        )}
+      />
+    );
+  }, [
+    activeColiseum?.minimized,
+    activeModel,
+    activeProvider,
+    activeTask,
+    activeTaskId,
+    args.compact,
+    isTurnActive,
+    restoreColiseum,
+  ]);
   const selectedModelOption = useMemo<ModelSelectorOption>(
     () =>
       buildModelSelectorValue({
@@ -1690,6 +1767,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       effortLabel={effortLabel}
       effortValue={effortValue}
       onEffortCycle={onEffortCycle}
+      coliseumAction={coliseumAction}
       crossReviewProvider={crossReviewProvider}
       onCrossReview={crossReviewProvider ? handleCrossReview : undefined}
       onModelSelect={({ selection }) => {

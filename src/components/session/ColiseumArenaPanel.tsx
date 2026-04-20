@@ -85,7 +85,7 @@ export const ColiseumArenaPanel = memo(ColiseumArenaPanelImpl);
 function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
   const [
     group,
-    branchTurnState,
+    runningBranches,
     championTaskId,
     hasReviewerVerdict,
     reviewerRunning,
@@ -100,12 +100,13 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
   ] = useAppStore(
     useShallow((state) => {
       const grp = state.activeColiseumsByTask[args.parentTaskId];
-      const turnState: Record<string, boolean> = {};
-      if (grp) {
-        for (const branchId of grp.branchTaskIds) {
-          turnState[branchId] = Boolean(state.activeTurnIdsByTask[branchId]);
-        }
-      }
+      const runningCount = grp
+        ? grp.branchTaskIds.reduce(
+            (count, branchId) =>
+              count + (state.activeTurnIdsByTask[branchId] ? 1 : 0),
+            0,
+          )
+        : 0;
       // Seed reviewer defaults from the parent task so the picker opens to a
       // sensible starting provider/model without the user having to re-pick.
       const parentTask = state.tasks.find((t) => t.id === args.parentTaskId);
@@ -116,7 +117,7 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
         parentDraft?.runtimeOverrides?.model ?? "";
       return [
         grp,
-        turnState,
+        runningCount,
         grp?.championTaskId ?? null,
         Boolean(grp?.reviewerVerdict),
         grp?.reviewerVerdict?.status === "running",
@@ -139,9 +140,6 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
   }
 
   const totalBranches = group.branchTaskIds.length;
-  const runningBranches = group.branchTaskIds.filter(
-    (branchId) => branchTurnState[branchId],
-  ).length;
   const completedBranches = totalBranches - runningBranches;
   const anyComplete = completedBranches > 0;
   const allComplete = runningBranches === 0;
@@ -419,7 +417,6 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
           parentTaskId={args.parentTaskId}
           focusedBranchId={focusedBranchId}
           group={group}
-          branchTurnState={branchTurnState}
           anyComplete={anyComplete}
           allComplete={allComplete}
           championTaskId={championTaskId}
@@ -441,7 +438,6 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
         <ArenaGridLayout
           parentTaskId={args.parentTaskId}
           group={group}
-          branchTurnState={branchTurnState}
           anyComplete={anyComplete}
           allComplete={allComplete}
           championTaskId={championTaskId}
@@ -475,7 +471,6 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
 interface ArenaLayoutProps {
   parentTaskId: string;
   group: ColiseumGroupState;
-  branchTurnState: Record<string, boolean>;
   anyComplete: boolean;
   allComplete: boolean;
   championTaskId: string | null;
@@ -487,7 +482,6 @@ function ArenaGridLayout(props: ArenaLayoutProps) {
   const {
     parentTaskId,
     group,
-    branchTurnState,
     anyComplete,
     allComplete,
     championTaskId,
@@ -513,7 +507,6 @@ function ArenaGridLayout(props: ArenaLayoutProps) {
                   index={index}
                   totalBranches={group.branchTaskIds.length}
                   parentMessageCountAtFanout={group.parentMessageCountAtFanout}
-                  isRunning={branchTurnState[branchTaskId] ?? false}
                   isChampion={championTaskId === branchTaskId}
                   anyBranchComplete={anyComplete}
                   allBranchesComplete={allComplete}
@@ -538,7 +531,6 @@ function ArenaFocusLayout(
   const {
     parentTaskId,
     group,
-    branchTurnState,
     anyComplete,
     allComplete,
     championTaskId,
@@ -559,47 +551,17 @@ function ArenaFocusLayout(
         </div>
         {otherBranchIds.map((branchId, i) => {
           const meta = group.branchMeta[branchId];
-          const running = branchTurnState[branchId] ?? false;
           const isChamp = championTaskId === branchId;
           const idx = group.branchTaskIds.indexOf(branchId);
           return (
-            <button
+            <ColiseumBranchRailButton
               key={branchId}
-              type="button"
+              branchId={branchId}
+              branchMeta={meta}
+              index={idx >= 0 ? idx : i}
+              isChampion={isChamp}
               onClick={() => onFocus(branchId)}
-              className={cn(
-                "flex flex-col gap-0.5 rounded-md border border-border/60 bg-background/70 px-2 py-1.5 text-left text-xs transition hover:border-primary/50 hover:bg-background",
-                isChamp && "border-primary/60",
-              )}
-            >
-              <div className="flex items-center gap-1.5">
-                <ModelIcon
-                  providerId={meta?.provider ?? "stave"}
-                  model={meta?.model}
-                  className="size-3"
-                />
-                <span className="min-w-0 truncate font-medium text-foreground">
-                  {displayBranchName(meta)}
-                </span>
-                {isChamp ? (
-                  <Crown className="size-3 shrink-0 text-amber-500" />
-                ) : null}
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span>#{idx + 1}</span>
-                {running ? (
-                  <>
-                    <span>·</span>
-                    <span className="text-primary">streaming</span>
-                  </>
-                ) : (
-                  <>
-                    <span>·</span>
-                    <span>done</span>
-                  </>
-                )}
-              </div>
-            </button>
+            />
           );
         })}
       </aside>
@@ -611,7 +573,6 @@ function ArenaFocusLayout(
           index={focusedIndex >= 0 ? focusedIndex : 0}
           totalBranches={group.branchTaskIds.length}
           parentMessageCountAtFanout={group.parentMessageCountAtFanout}
-          isRunning={branchTurnState[focusedBranchId] ?? false}
           isChampion={championTaskId === focusedBranchId}
           anyBranchComplete={anyComplete}
           allBranchesComplete={allComplete}
@@ -630,7 +591,6 @@ interface ColiseumBranchColumnProps {
   index: number;
   totalBranches: number;
   parentMessageCountAtFanout: number;
-  isRunning: boolean;
   isChampion: boolean;
   anyBranchComplete: boolean;
   allBranchesComplete: boolean;
@@ -638,8 +598,57 @@ interface ColiseumBranchColumnProps {
   onFocus: () => void;
 }
 
+interface ColiseumBranchRailButtonProps {
+  branchId: string;
+  branchMeta: ColiseumBranchMeta | undefined;
+  index: number;
+  isChampion: boolean;
+  onClick: () => void;
+}
+
+const ColiseumBranchRailButton = memo(function ColiseumBranchRailButtonImpl(
+  props: ColiseumBranchRailButtonProps,
+) {
+  const isRunning = useAppStore((state) =>
+    Boolean(state.activeTurnIdsByTask[props.branchId]),
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      className={cn(
+        "flex flex-col gap-0.5 rounded-md border border-border/60 bg-background/70 px-2 py-1.5 text-left text-xs transition hover:border-primary/50 hover:bg-background",
+        props.isChampion && "border-primary/60",
+      )}
+    >
+      <div className="flex items-center gap-1.5">
+        <ModelIcon
+          providerId={props.branchMeta?.provider ?? "stave"}
+          model={props.branchMeta?.model}
+          className="size-3"
+        />
+        <span className="min-w-0 truncate font-medium text-foreground">
+          {displayBranchName(props.branchMeta)}
+        </span>
+        {props.isChampion ? (
+          <Crown className="size-3 shrink-0 text-amber-500" />
+        ) : null}
+      </div>
+      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <span>#{props.index + 1}</span>
+        <span>·</span>
+        <span className={isRunning ? "text-primary" : undefined}>
+          {isRunning ? "streaming" : "done"}
+        </span>
+      </div>
+    </button>
+  );
+});
+
 function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
   const [
+    isRunning,
     messages,
     chatStreamingEnabled,
     showInterimMessages,
@@ -647,6 +656,7 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
   ] = useAppStore(
     useShallow((state) => {
       return [
+        Boolean(state.activeTurnIdsByTask[args.branchTaskId]),
         state.messagesByTask[args.branchTaskId] ?? EMPTY_MESSAGES,
         state.settings.chatStreamingEnabled,
         state.settings.showInterimMessages,
@@ -681,14 +691,14 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
     [branchMessages],
   );
   const hasAnyCompletedAssistant = branchAssistants.some((m) => !m.isStreaming);
-  const canPromote = hasAnyCompletedAssistant || !args.isRunning;
+  const canPromote = hasAnyCompletedAssistant || !isRunning;
 
   const fileChanges = useMemo(
     () => extractBranchFileChanges(branchMessages),
     [branchMessages],
   );
 
-  const statusLabel = args.isRunning
+  const statusLabel = isRunning
     ? "Streaming…"
     : branchAssistants.length === 0
       ? "Queued"
@@ -714,7 +724,7 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
           <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             {getProviderLabel({ providerId: headerProvider, variant: "short" })}
           </span>
-          {args.isRunning ? (
+          {isRunning ? (
             <WaveIndicator
               className={cn(
                 "size-3",
@@ -897,7 +907,7 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
           <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <Trophy className="size-3.5" />
-              {args.isRunning ? "Waiting for response…" : "No response yet"}
+              {isRunning ? "Waiting for response…" : "No response yet"}
             </div>
           </div>
         ) : (

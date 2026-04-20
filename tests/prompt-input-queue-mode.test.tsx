@@ -25,12 +25,15 @@ function setWindowContext() {
   (globalThis as { window?: unknown }).window = {
     api: {},
     localStorage: createMemoryStorage(),
+    location: {
+      href: "https://stave.test/workspace",
+    },
   } as unknown;
 }
 
 function getCrossReviewButtonMarkup(html: string) {
   return html.match(
-    /<button[^>]*aria-label="Review by Claude"[^>]*>[\s\S]*?<\/button>/,
+    /<button[^>]*aria-label="Review by Claude Code"[^>]*>[\s\S]*?<\/button>/,
   )?.[0];
 }
 
@@ -129,16 +132,51 @@ describe("PromptInput queue mode", () => {
     );
     const buttonMarkup = getCrossReviewButtonMarkup(html);
 
-    expect(html).toContain('aria-label="Review by Claude"');
+    expect(html).toContain('aria-label="Review by Claude Code"');
     expect(html).toContain(">Review by</span>");
-    expect(html).toContain(">Claude</span>");
+    expect(html).toContain(">Claude Code</span>");
     expect(buttonMarkup).toBeTruthy();
     expect(buttonMarkup).toContain('data-variant="ghost"');
     expect(buttonMarkup).toContain("text-muted-foreground");
     expect(buttonMarkup).toContain("hover:bg-secondary/30");
-    expect(buttonMarkup).toContain("bg-secondary/20");
-    expect(html.indexOf('aria-label="Review by Claude"')).toBeLessThan(
+    expect(buttonMarkup).toContain("<img");
+    expect(html.indexOf('aria-label="Review by Claude Code"')).toBeLessThan(
       html.indexOf('aria-label="Attach files"'),
+    );
+  });
+
+  test("renders a leading toolbar action before the cross-review CTA", async () => {
+    setWindowContext();
+    const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
+      import("@/components/ai-elements/prompt-input"),
+      import("@/components/ui"),
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PromptInput, {
+          value: "",
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: [],
+          crossReviewProvider: "claude-code" as const,
+          leadingToolbarAction: createElement(
+            "button",
+            { type: "button", "aria-label": "Open Coliseum" },
+            "Coliseum",
+          ),
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onCrossReview: () => {},
+          onSubmit: () => {},
+        }),
+      ),
+    );
+
+    expect(html.indexOf('aria-label="Open Coliseum"')).toBeLessThan(
+      html.indexOf('aria-label="Review by Claude Code"'),
     );
   });
 
@@ -228,5 +266,35 @@ describe("PromptInput queue mode", () => {
     expect(html).not.toContain("absolute right-4 top-4");
     expect(html).not.toContain("README.md");
     expect(html).not.toContain("Focus");
+  });
+
+  test("renders the runtime drawer trigger as an icon-only button", async () => {
+    setWindowContext();
+    const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
+      import("@/components/ai-elements/prompt-input"),
+      import("@/components/ui"),
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PromptInput, {
+          value: "",
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: [],
+          runtimeStatusItems: [
+            { id: "mode", label: "Mode", value: "Plan" },
+          ],
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onSubmit: () => {},
+        }),
+      ),
+    );
+
+    expect(html).toContain('aria-label="Current Runtime"');
+    expect(html).not.toContain(">Runtime</span>");
   });
 });

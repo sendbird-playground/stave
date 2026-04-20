@@ -1,5 +1,5 @@
 import { Plus, Swords, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -39,9 +39,10 @@ interface ColiseumLauncherDialogProps {
   parentTaskId: string;
   defaultProviderId?: ProviderId;
   defaultModel?: string;
-  /** Render-prop for the trigger element. Receives `disabled` to propagate. */
   disabled?: boolean;
   disabledReason?: string;
+  renderTrigger?: (args: { disabled: boolean }) => ReactNode;
+  tooltipSide?: "top" | "right" | "bottom" | "left";
 }
 
 interface BranchDraft {
@@ -209,6 +210,18 @@ export function ColiseumLauncherDialog(args: ColiseumLauncherDialogProps) {
   };
 
   const triggerDisabled = args.disabled === true;
+  const triggerElement = args.renderTrigger?.({ disabled: triggerDisabled }) ?? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="gap-1.5 text-xs"
+      disabled={triggerDisabled}
+    >
+      <Swords className="size-3.5" />
+      <span>Coliseum</span>
+    </Button>
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -217,20 +230,14 @@ export function ColiseumLauncherDialog(args: ColiseumLauncherDialogProps) {
           <TooltipTrigger asChild>
             <span className="inline-flex">
               <DialogTrigger asChild disabled={triggerDisabled}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  disabled={triggerDisabled}
-                >
-                  <Swords className="size-3.5" />
-                  <span>Coliseum</span>
-                </Button>
+                {triggerElement}
               </DialogTrigger>
             </span>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs text-xs">
+          <TooltipContent
+            side={args.tooltipSide ?? "bottom"}
+            className="max-w-xs text-xs"
+          >
             {triggerDisabled
               ? (args.disabledReason ??
                 "Coliseum is unavailable for this task right now.")
