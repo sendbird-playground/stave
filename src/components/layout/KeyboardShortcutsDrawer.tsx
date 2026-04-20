@@ -336,19 +336,19 @@ export function KeyboardShortcutsDrawer({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="top">
-      <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=top]:max-h-dvh data-[vaul-drawer-direction=top]:mb-0 data-[vaul-drawer-direction=top]:rounded-b-none data-[vaul-drawer-direction=top]:border-b-0">
-        <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
-          <DrawerHeader className="gap-3 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
+      <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=top]:mb-0 data-[vaul-drawer-direction=top]:h-dvh data-[vaul-drawer-direction=top]:max-h-dvh data-[vaul-drawer-direction=top]:rounded-b-none data-[vaul-drawer-direction=top]:border-b-0">
+        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
+          <DrawerHeader className="shrink-0 gap-0 border-b border-border/70 px-5 pb-5 pt-5 !text-left md:px-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background/80 text-foreground">
-                  <Keyboard />
+                  <Keyboard className="size-5" />
                 </div>
-                <div className="min-w-0">
-                  <DrawerTitle className="text-lg font-semibold">
+                <div className="min-w-0 text-left">
+                  <DrawerTitle className="truncate text-lg font-semibold leading-tight">
                     Keyboard Shortcuts
                   </DrawerTitle>
-                  <DrawerDescription>
+                  <DrawerDescription className="mt-0.5 truncate">
                     The current shell shortcuts available in Stave.
                   </DrawerDescription>
                 </div>
@@ -397,7 +397,7 @@ export function KeyboardShortcutsDrawer({
               </Card>
             ))}
           </div>
-          <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
+          <DrawerFooter className="shrink-0 border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
               Workspace quick jump follows the sidebar's top-to-bottom order.
               Quick open and the shortcut guide are ignored while typing in
