@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getColiseumDefaultModelForProvider,
   isColiseumSubmitShortcut,
   mergeColiseumAttachedFilePaths,
+  resolveColiseumInitialModel,
   resolveColiseumAttachmentFileContexts,
 } from "@/components/session/coliseum-launcher-dialog.utils";
 
@@ -68,6 +70,43 @@ describe("mergeColiseumAttachedFilePaths", () => {
         incoming: [" src/b.ts ", "src/a.ts", ""],
       }),
     ).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+});
+
+describe("getColiseumDefaultModelForProvider", () => {
+  test("uses Opus 4.7 as the Claude default inside Coliseum", () => {
+    expect(
+      getColiseumDefaultModelForProvider({ providerId: "claude-code" }),
+    ).toBe("claude-opus-4-7");
+  });
+
+  test("keeps non-Claude providers on their registry defaults", () => {
+    expect(getColiseumDefaultModelForProvider({ providerId: "codex" })).toBe(
+      "gpt-5.4",
+    );
+    expect(getColiseumDefaultModelForProvider({ providerId: "stave" })).toBe(
+      "stave-auto",
+    );
+  });
+});
+
+describe("resolveColiseumInitialModel", () => {
+  test("forces Claude Coliseum rows onto Opus 4.7 even when a different Claude model was preferred", () => {
+    expect(
+      resolveColiseumInitialModel({
+        providerId: "claude-code",
+        preferredModel: "claude-sonnet-4-6",
+      }),
+    ).toBe("claude-opus-4-7");
+  });
+
+  test("preserves an explicit non-Claude preferred model", () => {
+    expect(
+      resolveColiseumInitialModel({
+        providerId: "codex",
+        preferredModel: "gpt-5.4-mini",
+      }),
+    ).toBe("gpt-5.4-mini");
   });
 });
 

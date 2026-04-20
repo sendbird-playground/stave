@@ -1,206 +1,211 @@
-# Coliseum — Compare Models Side-By-Side
-
-<!-- Screenshot: the arena split view showing 3 branches streaming different models in parallel.
-     Capture steps: open any task, click the "Coliseum" button above the composer,
-     pick 3 entrants (Claude + Codex + Stave), send a short prompt, wait for all
-     three columns to stream, then screenshot the full session area. Save as
-     docs/screenshots/coliseum-arena.png (see "Capturing screenshots" at bottom). -->
+# Coliseum
 
 ![Coliseum arena with three models answering the same prompt in parallel](../screenshots/coliseum-arena.png)
 
-Run the same prompt across 2–4 models at once, watch their answers stream side by side, and promote one winner into your task history.
+_One prompt fans out across multiple entrants, while the parent task stays untouched until you pick a winner._
+
+Run the same prompt across 2-4 entrants in parallel, compare the results side by side, and promote one answer back into the parent task when you are ready.
 
 ## Summary
 
-- Coliseum is Stave's **multi-model parallel execution** feature.
-- You pick 2–4 `(provider, model)` entrants, send one prompt, and Stave streams all answers into a horizontal split view.
-- You then **pick a champion** to keep, or **dismiss the arena** to throw all answers away. The losing branches are cleaned up automatically — they never touch your task's canonical history.
+- Coliseum is Stave's side-by-side model comparison flow.
+- You choose a lineup of `(provider, model)` entrants, send one shared prompt, and watch each branch stream independently inside the arena.
+- Nothing is written into the parent task until you explicitly pick a champion.
+- After a winner is picked, you can still review, re-pick, merge ideas from other branches, or finish the arena.
 
 ## When To Use It
 
 Use Coliseum when:
 
-- You want to compare how **different models** handle the same problem before committing their output to the task.
-- You are unsure whether **Claude** or **Codex** (or a specific variant like Opus vs Sonnet, or GPT‑5.4 vs GPT‑5.4‑mini) will do better on a tricky prompt.
-- You are **evaluating** a new model, effort level, or mode preset against your current default.
-- You are writing **release notes, copy, summaries**, or anything where you want to cherry-pick the best of several drafts.
+- You want to compare how different models solve the same request before committing anything to the main task.
+- You are testing whether Claude, Codex, or `stave-auto` produces the clearest result for a prompt.
+- You want a reviewer model to compare multiple drafts and recommend a winner.
+- You need a strong final answer assembled from several branches rather than trusting one model run.
 
 Skip Coliseum when:
 
-- You already know which model you want — a single-model chat is faster and cheaper.
-- The task has a **pending approval or a running turn** — Coliseum requires a quiet parent turn before it can fan out.
-- You are inside a branch of another Coliseum — nested arenas are blocked on purpose.
+- You already know which model you want and a normal single-model turn is enough.
+- The parent task is still streaming, waiting on approval, or otherwise busy.
+- The task is externally managed and Stave cannot take over the turn lifecycle.
+- You want a multi-turn branch conversation. Coliseum is a single fan-out round, not a long-lived branch workspace.
 
 ## Before You Start
 
-- You need **at least one configured provider** (Claude Code, Codex, or Stave router). Coliseum picks from whichever providers you already have working.
-- Each entrant runs as a real provider session behind the scenes, so expect **N× the tokens and N× the API cost** of a single turn.
-- The parent task must not be **managed by an external controller** (e.g. an active Stave Muse or MCP handoff).
+- Coliseum supports **2 to 4 entrants**.
+- Every entrant is a real provider turn, so total cost and token usage scale with the number of branches you run.
+- The parent task must be idle before you can launch the arena.
+- Shared prompt text, attached files, and attached images are copied into every branch's first user message.
+- When Claude is selected inside Coliseum, new Claude rows default to **Opus 4.7**.
 
 ## Quick Start
 
-1. Open any task. The **Coliseum** button lives in a slim strip right above the chat composer.
-
-   <!-- Screenshot: the launcher strip with the "Coliseum" button visible.
-        Capture at docs/screenshots/coliseum-launcher-button.png -->
+1. Open a task and look above the composer for the **Coliseum** button.
 
    ![Coliseum launcher button above the composer](../screenshots/coliseum-launcher-button.png)
 
-2. Click **Coliseum** to open the launcher dialog. The dialog starts with **two entrants** pre-filled (one Claude, one Codex).
+   _The launcher lives in the composer control strip and is only available when the parent task is idle._
 
-   <!-- Screenshot: the launcher dialog with two default entrants + prompt textarea + Start button.
-        Capture at docs/screenshots/coliseum-launcher-dialog.png -->
+2. Click **Coliseum** to open the launcher dialog.
 
-   ![Coliseum launcher dialog](../screenshots/coliseum-launcher-dialog.png)
+   ![Coliseum launcher dialog with three entrants configured](../screenshots/coliseum-launcher-dialog.png)
 
-3. Adjust the lineup:
-   - **Add entrant** (up to 4) or remove rows with the trash icon.
-   - Each row has a **provider dropdown** and a **model dropdown**. Picking a provider auto-selects its default model.
-4. Type your prompt in the **Prompt** box.
+   _A new run starts with two entrants by default. You can add a third or fourth row before starting._
+
+3. Pick the entrants you want to compare. Each row has a provider picker and a model picker.
+4. Type the one prompt every entrant should run. Optionally attach files.
 5. Click **Start Coliseum**.
-
-The session area swaps to the arena view: one column per entrant, all streaming in parallel.
+6. Compare the live columns in the arena, optionally open **Review & compare**, then either:
+   - pick a winner and **Finish arena**
+   - or **Discard run** to throw everything away
 
 ## Interface Walkthrough
 
 ### Entry Point
 
-- The launcher button appears in the footer strip above the composer whenever an active task is selected and no turn is running.
-- The button is **disabled during an active turn** (tooltip: *"Wait for the current turn to finish before starting a Coliseum"*). Wait for the turn to finish or stop it manually, then try again.
+- The **Coliseum** button appears above the composer for the active task.
+- If the task is streaming, the button stays disabled until the current turn finishes or you stop it.
+- If a run is minimized, the same spot changes into **Reopen arena** so you can jump back into the comparison.
 
 ### Launcher Dialog
 
-- **Entrant rows** — each row is one `(provider, model)` pair that will receive the prompt.
-- **Provider dropdown** — Claude Code / Codex / Stave (router). Changing the provider resets the model to that provider's default.
-- **Model dropdown** — shows every model the selected provider exposes (Opus, Sonnet, Haiku, GPT‑5.4, GPT‑5.4‑mini, Stave auto, …).
-- **Add entrant** — adds one more row up to a maximum of **4**.
-- **Trash icon** — removes a row. You cannot drop below **2** rows (there is no contest with a single entrant).
-- **Prompt** — the single prompt every entrant will run. Same text, same attachments, same mode preset for all rows.
-- **Start Coliseum** — disabled until every row has a provider + model, the prompt is non-empty, and every selected provider is available.
+- **Entrant rows**: each row is one `(provider, model)` pair.
+- **Provider picker**: switching providers resets the row to that provider's Coliseum default model.
+- **Model picker**: choose the exact model variant for that row.
+- **Add entrant**: expands the lineup up to four branches.
+- **Remove entrant**: drops a row, but never below two entrants.
+- **Prompt**: the shared request every branch receives.
+- **Attach files**: sends the same file context to every entrant.
+- **Start shortcut**: `Cmd/Ctrl + Enter`.
+- **Validation**: the start button stays disabled until every row is valid, every provider is available, and the prompt is non-empty.
 
-### Arena Split View
+### Arena Header
 
-Once you start the arena, the normal chat panel is replaced by a horizontal split:
+- **Status badge**: shows whether the run is still `Running`, fully `Ready`, or already `Promoted`.
+- **Focus / Grid**: switches between all-columns view and single-branch focus mode.
+- **Review & compare**: launches or reopens the reviewer flow once at least one branch has finished.
+- **Minimize**: hides the arena and returns you to the normal task view without ending the run.
+- **Discard run**: aborts every branch and removes the arena if you have not promoted a winner.
+- **Finish arena**: appears after a champion is picked and closes the arena while keeping the promoted answer on the parent task.
+- **Unpick**: appears after promotion and rolls the parent task back to its pre-fan-out state so you can choose a different branch.
+- **Use ideas from**: appears after promotion and stages a follow-up draft that pulls ideas from non-winning branches into the parent task.
 
-- **Top bar** — shows entrant count and a **Dismiss** button. Dismiss discards the whole arena without keeping any answer.
-- **Columns** — one per entrant, left-to-right in the order you configured them. Columns are resizable: drag the dividers between them.
-- **Column header** — shows the model icon, model name, streaming wave indicator while the answer is still arriving, and the column's position (e.g. `2 / 3`).
-- **Pick champion** button — promotes this column's answer into the task's canonical history and closes the arena.
-- **Close this branch (×)** button — drops just this column. The arena collapses to a single-model chat if fewer than 2 branches would remain.
-- **Prompt card** — each column shows the shared prompt at the top so you can compare answers without scrolling back up.
-- **Answer stream** — the full assistant trace (thinking / tool calls / final answer) for that branch, same rendering you see in the normal chat view.
+### Branch Columns
+
+- **Column header**: shows the branch's provider, exact model, live activity state, and column index.
+- **Pick champion**: promotes that branch immediately. If other branches are still running, they stay alive so you can keep comparing.
+- **Focus this branch**: expands one branch and collapses the others into a rail.
+- **Close this branch**: drops just that branch. If only one branch would remain, the whole Coliseum is discarded.
+- **Prior conversation**: when the parent already had messages before fan-out, each branch can show the copied pre-fan-out context in a collapsible section.
+- **Prompt card**: shows the shared fan-out request at the top of the column.
+- **File changes**: lists touched files when the branch produced edit or diff output.
+- **Latest answer**: renders the branch's most recent assistant output with the same trace UI used in normal task chat.
+
+### Reviewer Dialog
+
+![Coliseum reviewer dialog with a completed verdict and merged-draft action](../screenshots/coliseum-reviewer-dialog.png)
+
+_The reviewer compares branch outputs, recommends a winner, and can queue a merged follow-up draft on the parent task._
+
+- **Available after first completion**: the review button stays disabled until at least one branch has produced an answer.
+- **Reviewer provider + model**: choose which model should compare the branches. When the reviewer is Claude, Coliseum defaults it to **Opus 4.7**.
+- **Live verdict stream**: reviewer output streams into the dialog like a normal turn.
+- **Re-run review**: runs a fresh comparison against the current branch outputs.
+- **Clear review**: removes the current verdict without affecting the branches.
+- **Draft merged answer**: creates a parent-task draft that uses the reviewer verdict plus branch outputs to synthesize one stronger final answer.
 
 ## Common Workflows
 
-### Run A Coliseum And Promote A Winner
+### Compare Models Before Choosing One
 
-1. Open a task, click **Coliseum**, pick 2–4 entrants, type a prompt, click **Start Coliseum**.
-2. Wait for at least the column you care about to finish streaming. (Other columns keep streaming independently.)
-3. Click **Pick champion** on the winning column.
-4. The arena closes, the champion's response is grafted onto the task's message history, and all other branches (including their provider sessions) are cleaned up.
-5. Continue the conversation as usual — the champion's `providerSession` becomes the task's new session, so the next turn resumes from the winner's context.
+1. Start a Coliseum with 2-4 entrants.
+2. Watch the branches stream in parallel.
+3. Open focus mode if one branch deserves closer inspection.
+4. Compare the prompt card, file changes, and final answer in each column.
 
-### Throw Everything Away
+### Promote, Re-Pick, And Finish
 
-- Click **Dismiss** in the arena top bar.
-- No answer is promoted; every branch is cleaned up; the task returns to the state it had **before** the arena started.
+1. Click **Pick champion** on the branch you want to keep.
+2. Stave grafts that branch's post-fan-out messages into the parent task.
+3. If you change your mind, click **Unpick** and select a different branch.
+4. When you are satisfied, click **Finish arena** to leave comparison mode.
 
-### Drop A Losing Column Early
+### Review Branches And Draft A Merged Answer
 
-- Click the **×** button in a column's header.
-- The column's runtime is aborted and its branch task is removed.
-- If only one entrant would remain after the removal, the whole arena is dismissed automatically (a single-model race is not a Coliseum).
+1. Wait until at least one branch finishes.
+2. Click **Review & compare**.
+3. Let the reviewer recommend the best branch and call out trade-offs.
+4. Use **Draft merged answer** if you want the parent task to synthesize one final response from several branches instead of promoting a single winner unchanged.
 
-### Restart With A Different Lineup
+### Pause The Arena Without Losing It
 
-- After you promote or dismiss, click **Coliseum** again on the same task. The dialog re-opens with default entrants and an empty prompt.
+1. Click **Minimize**.
+2. Continue browsing the parent task normally while branches keep running.
+3. Click **Reopen arena** above the composer to restore the comparison view.
 
-## How It Works (Short Version)
+### Throw The Run Away
 
-- Each entrant runs as a real, ephemeral **child task** linked to the parent via `coliseumParentTaskId`.
-- Branches inherit the parent's **runtime overrides** (permission mode, plan mode, effort) so every entrant runs under the same mode preset as the parent — the only difference between branches is the model.
-- Branch tasks are **hidden from task tabs, sidebar previews, and the command palette** — they only exist in the arena.
-- When you promote a champion, Stave appends **only the post-fan-out tail** of the champion's messages to the parent's history, rewriting the IDs so the graft is seamless.
-- When you dismiss, close a branch, or reload a workspace, any remaining branch tasks are **reaped** so they never clutter the task tree.
+1. Click **Discard run** before finishing.
+2. Stave aborts every remaining branch and removes the arena.
+3. The parent task returns to the exact state it had before Coliseum started.
 
-Full architecture detail lives in `docs/architecture/` alongside the other runtime docs. This guide stays user-facing.
+## How It Works
+
+- Stave creates one hidden child task per entrant.
+- Each child task receives the same prompt payload, attachments, and inherited runtime mode settings from the parent.
+- Branch tasks stay hidden from the task list, sidebar previews, and task tabs. You interact with them only through the arena.
+- The parent task remains unchanged while the run is active.
+- When you promote a winner, Stave appends only that branch's post-fan-out tail back into the parent task.
+- If you discard the run, close branches, or reload a workspace with stale branch records, Stave reaps the ephemeral tasks automatically.
 
 ## Limitations And Advanced Options
 
-- **Entrant count**: 2 (minimum) to 4 (maximum). The upper bound keeps the horizontal split readable on typical laptop widths; higher fan-outs turn into eye strain.
-- **No duplicate prompt replay**: the prompt runs once per branch. If you want to *re-run* the same lineup with a different prompt, dismiss and start a new Coliseum.
-- **No branch-level edits**: you cannot send follow-up messages into individual branches. The arena is one round — pick a champion, then continue in the parent task.
-- **Shared attachments**: attachments and file contexts are copied into each branch's first user message verbatim. They are not re-read per branch.
-- **Cost**: each branch is a real provider turn. Running 4 Opus entrants costs 4× an Opus turn. Prefer `stave-auto` or smaller models when exploring.
-- **Managed tasks**: Coliseum is blocked on externally-managed tasks (tasks under an MCP controller or Stave Muse lease). Take over the task first if you need to fan out.
+- Coliseum is a one-round comparison. You cannot chat back and forth inside individual branches.
+- The layout is capped at four entrants to keep the arena readable.
+- Shared attachments are copied once at launch. Branches do not re-read files automatically after the run has started.
+- Nested Coliseums are blocked.
+- Managed tasks cannot launch Coliseum until Stave owns the task again.
+- Running large or expensive models in every branch can multiply cost quickly. Use smaller models or `stave-auto` when you want a cheaper exploratory pass.
 
 ## Troubleshooting
 
-### The **Coliseum** button is missing
+### The Coliseum button is missing
 
-- Symptom: no button appears above the chat composer.
-- Cause: either no task is active, or the task is still hydrating.
-- Fix: create or select a task first. If the button still does not show after the message list loads, reopen the workspace.
+- Symptom: the control strip above the composer does not show **Coliseum**.
+- Cause: no active task is selected, or the task view is still hydrating.
+- Fix: select a task and wait for the task view to finish loading.
 
-### The **Coliseum** button is disabled
+### The Coliseum button is disabled
 
-- Symptom: tooltip says *"Wait for the current turn to finish before starting a Coliseum"*.
-- Cause: the parent task has a streaming turn.
-- Fix: wait for the turn to finish, or press **Stop** in the composer, then click Coliseum again.
+- Symptom: hovering the button says you must wait for the current turn to finish.
+- Cause: the parent task still has a running turn.
+- Fix: wait for the turn to end or stop it, then reopen the launcher.
 
-### **Start Coliseum** stays disabled
+### Start Coliseum stays disabled
 
-- Symptom: validation hint under the rows ("Pick at least 2 models…" / "Every entrant needs a provider and a model." / "One or more selected providers are unavailable.").
-- Cause: missing provider/model, unavailable provider, or an empty prompt.
-- Fix: ensure every row has a provider + model, the prompt is non-empty, and each selected provider is reachable (check provider availability in the composer's provider bar).
+- Symptom: the dialog never enables **Start Coliseum**.
+- Cause: one row is incomplete, the prompt is empty, or a selected provider is unavailable.
+- Fix: verify every row has a valid provider and model, enter a prompt, and confirm provider availability in the task controls.
 
-### One column never produces an answer
+### Review & compare is disabled
 
-- Symptom: the column keeps showing *"Waiting for response…"* with a streaming indicator that never turns into text.
-- Cause: that specific provider/model errored or is rate-limited. Its branch may have failed silently.
-- Fix: use the column's **×** button to close the failed branch. The arena keeps running for the remaining entrants. If this repeats, check the provider's status and try a different model.
+- Symptom: the arena header shows **Review & compare**, but it cannot be clicked yet.
+- Cause: no branch has finished producing an answer.
+- Fix: wait for the first completed branch, then open the reviewer.
 
-### A persistent branch task shows up in my task list
+### One branch looks stuck
 
-- Symptom: a task prefixed or duplicated from the parent's title appears in the task tabs.
-- Cause: branch tasks are normally hidden, but a bug or persistence edge case left one un-reaped.
-- Fix: reload the workspace. The orphan reaper runs on workspace load and drops any branch that has no live Coliseum group.
+- Symptom: one column keeps showing a live state without useful output.
+- Cause: that provider or model may have failed, stalled, or been rate-limited.
+- Fix: close just that branch and continue with the remaining entrants, or rerun the whole Coliseum with a different lineup.
 
-## Keyboard Shortcuts
+### A branch task shows up after reload
 
-- `Esc` — close the launcher dialog without starting a Coliseum.
-- `Tab` / `Shift+Tab` — move focus between entrant controls, prompt, and the Start button.
-- The arena itself does not have custom shortcuts yet. Use the column buttons for promotion, closing a branch, or dismissing the arena.
-
-## Files And Data
-
-User-visible state:
-
-- **Parent task** — unchanged until you promote a champion. No new messages are written to the parent during a Coliseum.
-- **Branch tasks** — ephemeral; live only in runtime memory and the workspace's session cache. Not persisted across workspace reloads.
-- **Champion graft** — when you promote, the post-fan-out messages from the champion are appended to the parent's persisted message history. From the user's perspective it looks exactly like a normal turn response.
-
-## Capturing Screenshots
-
-The guide references three images that need to be captured manually:
-
-| File | What to capture |
-|---|---|
-| `docs/screenshots/coliseum-launcher-button.png` | Chat composer with the **Coliseum** launcher strip visible above it. |
-| `docs/screenshots/coliseum-launcher-dialog.png` | The launcher dialog with 2–3 entrants configured and a prompt typed in. |
-| `docs/screenshots/coliseum-arena.png` | The arena split view with 2–3 columns streaming different models. |
-
-To capture:
-
-1. `bun run dev` and open a workspace.
-2. Select a task with no active turn.
-3. Screenshot the launcher strip (**coliseum-launcher-button.png**).
-4. Click **Coliseum**, screenshot the dialog with a short demo prompt typed in (**coliseum-launcher-dialog.png**).
-5. Click **Start Coliseum**. Once all columns are streaming or finished, screenshot the full session area (**coliseum-arena.png**).
-6. Crop tightly to the relevant surface, avoid private prompt content or personal paths.
+- Symptom: you briefly see a duplicated task title or a stale hidden branch.
+- Cause: a stale runtime branch survived until workspace bootstrap.
+- Fix: reload the workspace. Stave reaps orphan Coliseum tasks on load.
 
 ## Related Docs
 
-- [Provider Sandbox and Approval](provider-sandbox-and-approval.md) — the mode presets Coliseum inherits from the parent task.
-- [Stave Model Router](stave-model-router.md) — use `stave-auto` as a lightweight entrant when you are not sure which model to pick.
-- [Attachments](attachments.md) — how file and image context is attached to the shared prompt.
+- [Provider Sandbox and Approval](provider-sandbox-and-approval.md)
+- [Stave Model Router](stave-model-router.md)
+- [Attachments](attachments.md)
