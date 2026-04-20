@@ -13,6 +13,7 @@ import {
   ScrollText,
   SearchCheck,
   Shield,
+  SlidersHorizontal,
   Sparkles,
   TerminalSquare,
   Wrench,
@@ -20,6 +21,7 @@ import {
 
 export const settingsSections = [
   { id: "general", label: "General", icon: Cog },
+  { id: "presets", label: "Presets", icon: SlidersHorizontal },
   { id: "projects", label: "Projects", icon: Folder },
   { id: "theme", label: "Design", icon: Palette },
   { id: "chat", label: "Chat", icon: Bot },
@@ -41,10 +43,23 @@ export const settingsSections = [
 
 export type SectionId = (typeof settingsSections)[number]["id"];
 
-export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
-  { label: "Workspace", ids: ["general"] },
-  { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
-  { label: "Projects", ids: ["projects"] },
-  { label: "Providers", ids: ["muse", "providers", "codex", "mcp", "prompts", "skills", "subagents", "commandPalette"] },
-  { label: "System", ids: ["tooling", "lens", "developer", "changelog"] },
-];
+export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> =
+  [
+    { label: "Workspace", ids: ["general", "presets"] },
+    { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
+    { label: "Projects", ids: ["projects"] },
+    {
+      label: "Providers",
+      ids: [
+        "muse",
+        "providers",
+        "codex",
+        "mcp",
+        "prompts",
+        "skills",
+        "subagents",
+        "commandPalette",
+      ],
+    },
+    { label: "System", ids: ["tooling", "lens", "developer", "changelog"] },
+  ];

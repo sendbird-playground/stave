@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   cloneDefaultTaskPresets,
   DEFAULT_TASK_PRESETS,
+  getTaskPresetShortcutLabel,
   listModelsForPresetProvider,
   normalizePersistedTaskPresets,
   normalizeTaskPreset,
+  resolveTaskPresetShortcutSlot,
   type TaskPreset,
 } from "@/lib/task-presets";
 
@@ -105,5 +107,55 @@ describe("normalizePersistedTaskPresets", () => {
     expect(first.id).toBe("alpha");
     expect(second.id).not.toBe("alpha");
     expect(second.label).toBe("B");
+  });
+});
+
+describe("preset shortcuts", () => {
+  test("maps Ctrl+1..9 to the first nine preset slots", () => {
+    expect(
+      resolveTaskPresetShortcutSlot({
+        key: "1",
+        code: "Digit1",
+        ctrlKey: true,
+      }),
+    ).toBe(0);
+    expect(
+      resolveTaskPresetShortcutSlot({
+        key: "9",
+        code: "Digit9",
+        ctrlKey: true,
+      }),
+    ).toBe(8);
+  });
+
+  test("ignores non-control shortcuts and modifier collisions", () => {
+    expect(
+      resolveTaskPresetShortcutSlot({
+        key: "1",
+        code: "Digit1",
+        metaKey: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveTaskPresetShortcutSlot({
+        key: "1",
+        code: "Digit1",
+        ctrlKey: true,
+        shiftKey: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveTaskPresetShortcutSlot({
+        key: "0",
+        code: "Digit0",
+        ctrlKey: true,
+      }),
+    ).toBeNull();
+  });
+
+  test("returns human-readable labels for the first nine slots", () => {
+    expect(getTaskPresetShortcutLabel(0)).toBe("1");
+    expect(getTaskPresetShortcutLabel(8)).toBe("9");
+    expect(getTaskPresetShortcutLabel(9)).toBeNull();
   });
 });

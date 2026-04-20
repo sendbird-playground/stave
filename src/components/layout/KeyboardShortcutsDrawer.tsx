@@ -1,4 +1,5 @@
 import { Fragment, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Keyboard } from "lucide-react";
 import {
   Badge,
@@ -24,6 +25,10 @@ import {
   MODEL_SHORTCUT_SLOT_LABELS,
   normalizeModelShortcutKeys,
 } from "@/lib/providers/model-shortcuts";
+import {
+  getTaskPresetShortcutLabel,
+  TASK_PRESET_SHORTCUT_SLOT_LABELS,
+} from "@/lib/task-presets";
 import { useAppStore } from "@/store/app.store";
 
 interface KeyboardShortcutsDrawerProps {
@@ -83,8 +88,11 @@ export function KeyboardShortcutsDrawer({
         : "Ctrl",
     [],
   );
-  const storedModelShortcutKeys = useAppStore(
-    (state) => state.settings.modelShortcutKeys,
+  const [storedModelShortcutKeys, taskPresets] = useAppStore(
+    useShallow(
+      (state) =>
+        [state.settings.modelShortcutKeys, state.settings.taskPresets] as const,
+    ),
   );
   const normalizedModelShortcutKeys = useMemo(
     () => normalizeModelShortcutKeys(storedModelShortcutKeys),
@@ -118,6 +126,36 @@ export function KeyboardShortcutsDrawer({
       },
     ];
   }, [normalizedModelShortcutKeys]);
+  const presetShortcutItems = useMemo<ShortcutItem[]>(() => {
+    const assignedItems = taskPresets
+      .slice(0, TASK_PRESET_SHORTCUT_SLOT_LABELS.length)
+      .map((preset, index) => {
+        const slotLabel = getTaskPresetShortcutLabel(index);
+        if (!slotLabel) {
+          return null;
+        }
+        return {
+          label: `Run ${preset.label}`,
+          description:
+            "Launch this preset directly. Reorder presets in Settings → Presets to change Ctrl+1..9.",
+          sequences: [["Ctrl", slotLabel]],
+        } satisfies ShortcutItem;
+      })
+      .filter((item): item is ShortcutItem => item != null);
+
+    if (assignedItems.length > 0) {
+      return assignedItems;
+    }
+
+    return [
+      {
+        label: "Preset shortcut slots",
+        description:
+          "The first nine presets in Settings → Presets respond to Ctrl+1..9 in list order.",
+        sequences: [["Ctrl", "1-9"]],
+      },
+    ];
+  }, [taskPresets]);
 
   if (!open) {
     return null;
@@ -134,7 +172,7 @@ export function KeyboardShortcutsDrawer({
             label: "Select workspace",
             description:
               "Jump to the first nine visible workspaces in the sidebar, from top to bottom.",
-            sequences: [[modifierLabel, "1-9"]],
+            sequences: [[modifierLabel, "Shift", "1-9"]],
           },
           {
             label: "New task",
@@ -164,6 +202,11 @@ export function KeyboardShortcutsDrawer({
             ],
           },
         ],
+      },
+      {
+        title: "Presets",
+        description: "Launch the preset bar without leaving the keyboard.",
+        shortcuts: presetShortcutItems,
       },
       {
         title: "Panels",
@@ -288,7 +331,7 @@ export function KeyboardShortcutsDrawer({
         ],
       },
     ],
-    [modelShortcutItems, modifierLabel],
+    [modelShortcutItems, modifierLabel, presetShortcutItems],
   );
 
   return (

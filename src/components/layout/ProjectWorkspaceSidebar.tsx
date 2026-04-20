@@ -68,9 +68,15 @@ import {
   TooltipTrigger,
   WaveIndicator,
 } from "@/components/ui";
-import { loadWorkspaceShellSummary, type WorkspaceShellSummary } from "@/lib/db/workspaces.db";
+import {
+  loadWorkspaceShellSummary,
+  type WorkspaceShellSummary,
+} from "@/lib/db/workspaces.db";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
-import { resolveProviderTurnDisplayState, type ProviderTurnActivitySnapshot } from "@/lib/providers/turn-status";
+import {
+  resolveProviderTurnDisplayState,
+  type ProviderTurnActivitySnapshot,
+} from "@/lib/providers/turn-status";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
@@ -90,7 +96,10 @@ function resolveRespondingToneClass(args: {
   tasks: ReturnType<typeof useAppStore.getState>["tasks"];
   messagesByTask: Record<string, ChatMessage[]>;
   activeTurnIdsByTask: Record<string, string | undefined>;
-  providerTurnActivityByTask: Record<string, ProviderTurnActivitySnapshot | undefined>;
+  providerTurnActivityByTask: Record<
+    string,
+    ProviderTurnActivitySnapshot | undefined
+  >;
 }) {
   const respondingTasks = getRespondingTasks({
     tasks: args.tasks,
@@ -113,21 +122,21 @@ function resolveRespondingToneClass(args: {
       ),
     ),
   );
-  const hasStalledTask = respondingTasks.some((task) =>
-    resolveProviderTurnDisplayState({
-      activeTurnId: args.activeTurnIdsByTask[task.id] ?? null,
-      activity: args.providerTurnActivityByTask[task.id] ?? null,
-    }) === "stalled"
+  const hasStalledTask = respondingTasks.some(
+    (task) =>
+      resolveProviderTurnDisplayState({
+        activeTurnId: args.activeTurnIdsByTask[task.id] ?? null,
+        activity: args.providerTurnActivityByTask[task.id] ?? null,
+      }) === "stalled",
   );
 
   return {
     respondingTaskCount: respondingTasks.length,
-    respondingToneClass:
-      hasStalledTask
-        ? "text-warning"
-        : providers.length === 1 && providers[0]
-          ? getProviderWaveToneClass({ providerId: providers[0] })
-          : "text-primary",
+    respondingToneClass: hasStalledTask
+      ? "text-warning"
+      : providers.length === 1 && providers[0]
+        ? getProviderWaveToneClass({ providerId: providers[0] })
+        : "text-primary",
   };
 }
 
@@ -152,7 +161,13 @@ function formatCountLabel(count: number, singular: string) {
 }
 
 function useWorkspaceSidebarActivityState(workspaceId: string) {
-  const [tasks, messagesByTask, activeTurnIdsByTask, providerTurnActivityByTask, prStatus] = useAppStore(
+  const [
+    tasks,
+    messagesByTask,
+    activeTurnIdsByTask,
+    providerTurnActivityByTask,
+    prStatus,
+  ] = useAppStore(
     useShallow((state) => {
       if (state.activeWorkspaceId === workspaceId) {
         return [
@@ -165,12 +180,12 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
       }
       const runtimeState = state.workspaceRuntimeCacheById[workspaceId];
       return [
-          runtimeState?.tasks ?? EMPTY_TASKS,
-          runtimeState?.messagesByTask ?? EMPTY_MESSAGES_BY_TASK,
-          runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
-          state.providerTurnActivityByTask,
-          state.workspacePrInfoById[workspaceId]?.derived ?? null,
-        ] as const;
+        runtimeState?.tasks ?? EMPTY_TASKS,
+        runtimeState?.messagesByTask ?? EMPTY_MESSAGES_BY_TASK,
+        runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
+        state.providerTurnActivityByTask,
+        state.workspacePrInfoById[workspaceId]?.derived ?? null,
+      ] as const;
     }),
   );
 
@@ -184,7 +199,13 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
       }),
       prStatus,
     }),
-    [activeTurnIdsByTask, messagesByTask, prStatus, providerTurnActivityByTask, tasks],
+    [
+      activeTurnIdsByTask,
+      messagesByTask,
+      prStatus,
+      providerTurnActivityByTask,
+      tasks,
+    ],
   );
 }
 
@@ -230,13 +251,11 @@ function WorkspaceHoverPreviewTooltip(args: {
   side: "top" | "right";
   children: ReactNode;
 }) {
-  const {
-    tasks,
-    messageCountByTask,
-    activeTurnIdsByTask,
-    hasRuntimeState,
-  } = useWorkspaceHoverPreviewState(args.workspaceId);
-  const [loadedShell, setLoadedShell] = useState<WorkspaceShellSummary | null | undefined>(undefined);
+  const { tasks, messageCountByTask, activeTurnIdsByTask, hasRuntimeState } =
+    useWorkspaceHoverPreviewState(args.workspaceId);
+  const [loadedShell, setLoadedShell] = useState<
+    WorkspaceShellSummary | null | undefined
+  >(undefined);
   const [isShellLoading, setIsShellLoading] = useState(false);
   const [didShellLoadFail, setDidShellLoadFail] = useState(false);
 
@@ -251,7 +270,8 @@ function WorkspaceHoverPreviewTooltip(args: {
     if (loadedShell !== undefined) {
       return buildWorkspaceHoverPreview({
         tasks: loadedShell?.tasks ?? EMPTY_TASKS,
-        messageCountByTask: loadedShell?.messageCountByTask ?? EMPTY_MESSAGE_COUNT_BY_TASK,
+        messageCountByTask:
+          loadedShell?.messageCountByTask ?? EMPTY_MESSAGE_COUNT_BY_TASK,
       });
     }
     return null;
@@ -265,7 +285,12 @@ function WorkspaceHoverPreviewTooltip(args: {
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open || hasRuntimeState || loadedShell !== undefined || isShellLoading) {
+      if (
+        !open ||
+        hasRuntimeState ||
+        loadedShell !== undefined ||
+        isShellLoading
+      ) {
         return;
       }
 
@@ -357,7 +382,7 @@ function WorkspaceHoverPreviewTooltip(args: {
             )}
             {args.shortcutLabel ? (
               <WorkspaceShortcutChip
-                modifier={shortcutModifierSymbol}
+                modifier={workspaceShortcutModifierLabel}
                 label={args.shortcutLabel}
                 className="mt-0.5 h-4 px-1 text-[10px]"
               />
@@ -369,71 +394,80 @@ function WorkspaceHoverPreviewTooltip(args: {
   );
 }
 
-const WorkspaceLeadingStatusIcon = memo(function WorkspaceLeadingStatusIcon(args: {
-  workspaceId: string;
-  workspaceName: string;
-  isDefault: boolean;
-  busy: boolean;
-}) {
-  const { respondingTaskCount, respondingToneClass, prStatus } =
-    useWorkspaceSidebarActivityState(args.workspaceId);
+const WorkspaceLeadingStatusIcon = memo(
+  function WorkspaceLeadingStatusIcon(args: {
+    workspaceId: string;
+    workspaceName: string;
+    isDefault: boolean;
+    busy: boolean;
+  }) {
+    const { respondingTaskCount, respondingToneClass, prStatus } =
+      useWorkspaceSidebarActivityState(args.workspaceId);
 
-  if (args.busy) {
-    return <LoaderCircle className="size-4 animate-spin text-muted-foreground" />;
-  }
+    if (args.busy) {
+      return (
+        <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+      );
+    }
 
-  if (respondingTaskCount > 0) {
+    if (respondingTaskCount > 0) {
+      return (
+        <WaveIndicator
+          className={cn("gap-px", respondingToneClass)}
+          barClassName="h-3 w-0.5 rounded-[2px]"
+        />
+      );
+    }
+
+    if (!args.isDefault && prStatus) {
+      return <PrStatusIcon status={prStatus} />;
+    }
+
     return (
-      <WaveIndicator
-        className={cn("gap-px", respondingToneClass)}
-        barClassName="h-3 w-0.5 rounded-[2px]"
+      <WorkspaceIdentityMark
+        workspaceName={args.workspaceName}
+        isDefault={args.isDefault}
       />
     );
-  }
+  },
+);
 
-  if (!args.isDefault && prStatus) {
-    return <PrStatusIcon status={prStatus} />;
-  }
+const WorkspaceRespondingCountBadge = memo(
+  function WorkspaceRespondingCountBadge(args: {
+    workspaceId: string;
+    hasHoverActions: boolean;
+    isClosing: boolean;
+  }) {
+    const { respondingTaskCount } = useWorkspaceSidebarActivityState(
+      args.workspaceId,
+    );
 
-  return (
-    <WorkspaceIdentityMark
-      workspaceName={args.workspaceName}
-      isDefault={args.isDefault}
-    />
-  );
-});
+    if (respondingTaskCount === 0) {
+      return null;
+    }
 
-const WorkspaceRespondingCountBadge = memo(function WorkspaceRespondingCountBadge(args: {
-  workspaceId: string;
-  hasHoverActions: boolean;
-  isClosing: boolean;
-}) {
-  const { respondingTaskCount } = useWorkspaceSidebarActivityState(args.workspaceId);
+    return (
+      <div className="flex h-7 min-w-7 items-center justify-center pr-1">
+        <Badge
+          variant="outline"
+          className={cn(
+            "min-w-7 justify-center rounded-sm border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity",
+            getWorkspaceRespondingCountVisibilityClasses({
+              hasHoverActions: args.hasHoverActions,
+              isClosing: args.isClosing,
+            }),
+          )}
+        >
+          {respondingTaskCount}
+        </Badge>
+      </div>
+    );
+  },
+);
 
-  if (respondingTaskCount === 0) {
-    return null;
-  }
-
-  return (
-    <div className="flex h-7 min-w-7 items-center justify-center pr-1">
-      <Badge
-        variant="outline"
-        className={cn(
-          "min-w-7 justify-center rounded-sm border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity",
-          getWorkspaceRespondingCountVisibilityClasses({
-            hasHoverActions: args.hasHoverActions,
-            isClosing: args.isClosing,
-          }),
-        )}
-      >
-        {respondingTaskCount}
-      </Badge>
-    </div>
-  );
-});
-
-const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
-const shortcutModifierSymbol = IS_MAC ? "\u2318" : "Ctrl";
+const IS_MAC =
+  typeof window !== "undefined" && window.api?.platform === "darwin";
+const workspaceShortcutModifierLabel = IS_MAC ? "\u2318\u21E7" : "Ctrl+Shift";
 const DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH = 64;
 /** Height reserved at the top of the collapsed sidebar for macOS traffic-light buttons. */
 const MAC_TRAFFIC_LIGHT_CLEARANCE = 40;
@@ -733,7 +767,7 @@ export function ProjectWorkspaceSidebar(args: {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const hasMod = event.ctrlKey || event.metaKey;
-      if (!hasMod || event.altKey || event.shiftKey) {
+      if (!hasMod || event.altKey || !event.shiftKey) {
         return;
       }
 
@@ -741,7 +775,10 @@ export function ProjectWorkspaceSidebar(args: {
         return;
       }
 
-      const shortcutIndex = Number.parseInt(event.key, 10) - 1;
+      const digitMatch = event.code.match(/^Digit([1-9])$/);
+      const shortcutIndex = digitMatch
+        ? Number.parseInt(digitMatch[1] ?? "", 10) - 1
+        : Number.parseInt(event.key, 10) - 1;
       if (
         Number.isNaN(shortcutIndex) ||
         shortcutIndex < 0 ||
@@ -1375,9 +1412,16 @@ export function ProjectWorkspaceSidebar(args: {
                                                         </WorkspaceHoverPreviewTooltip>
                                                         <div className="relative shrink-0">
                                                           <WorkspaceRespondingCountBadge
-                                                            workspaceId={workspace.id}
-                                                            hasHoverActions={hasHoverActions}
-                                                            isClosing={closingWorkspaceId === workspace.id}
+                                                            workspaceId={
+                                                              workspace.id
+                                                            }
+                                                            hasHoverActions={
+                                                              hasHoverActions
+                                                            }
+                                                            isClosing={
+                                                              closingWorkspaceId ===
+                                                              workspace.id
+                                                            }
                                                           />
                                                           {hasHoverActions ? (
                                                             <div
@@ -1395,7 +1439,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                               {workspaceShortcutLabel ? (
                                                                 <WorkspaceShortcutChip
                                                                   modifier={
-                                                                    shortcutModifierSymbol
+                                                                    workspaceShortcutModifierLabel
                                                                   }
                                                                   label={
                                                                     workspaceShortcutLabel

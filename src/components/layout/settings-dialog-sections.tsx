@@ -110,6 +110,7 @@ import {
 import type { ResolvedWorkspaceScriptsConfig } from "@/lib/workspace-scripts/types";
 import { ChangelogSection } from "./settings-dialog-changelog-section";
 import { DeveloperSection } from "./settings-dialog-developer-section";
+import { PresetsSection } from "./settings-dialog-presets-section";
 import { CodexSection } from "./settings-dialog-codex-section";
 import { McpSection } from "./settings-dialog-mcp-section";
 import { MuseSection } from "./settings-dialog-muse-section";
@@ -2938,6 +2939,8 @@ export function SettingsDialogSectionContent(args: {
           selectedProjectPath={args.selectedProjectPath}
         />
       );
+    case "presets":
+      return <PresetsSection />;
     case "theme":
       return <ThemeSection />;
     case "terminal":

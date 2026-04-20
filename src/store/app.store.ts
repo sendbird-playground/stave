@@ -743,6 +743,7 @@ function logWorkspaceSwitchMetric(args: {
 
 export interface AppSettings {
   appShellMode: AppShellMode;
+  showPresetBar: boolean;
   themeMode: "light" | "dark" | "system";
   /** ID of the active custom theme preset, or `null` for the default. */
   customThemeId: string | null;
@@ -1565,7 +1566,8 @@ function showNotificationToast(notification: AppNotification) {
 
 const ARCHIVED_TASK_TURN_NOTICE =
   "Generation stopped because the task was archived before this turn completed.";
-export const STAVE_MUSE_OPEN_SETTINGS_EVENT = "stave:muse-open-settings";
+export const STAVE_OPEN_SETTINGS_EVENT = "stave:open-settings";
+export const STAVE_MUSE_OPEN_SETTINGS_EVENT = STAVE_OPEN_SETTINGS_EVENT;
 const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
   presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 });
@@ -1582,6 +1584,7 @@ function normalizeReasoningExpansionMode(value: unknown): "auto" | "manual" {
 
 const defaultSettings: AppSettings = {
   appShellMode: "stave",
+  showPresetBar: true,
   themeMode: "dark",
   customThemeId: null,
   sidebarArtworkMode: DEFAULT_SIDEBAR_ARTWORK_MODE,
@@ -5874,10 +5877,8 @@ export const useAppStore = create<AppState>()(
           const nextWorkspace =
             state.workspaces.find(
               (item) =>
-                item.id !== workspaceId &&
-                state.workspaceDefaultById[item.id],
-            ) ??
-            state.workspaces.find((item) => item.id !== workspaceId);
+                item.id !== workspaceId && state.workspaceDefaultById[item.id],
+            ) ?? state.workspaces.find((item) => item.id !== workspaceId);
           if (!nextWorkspace) {
             const workspaceState = buildWorkspaceSessionState({
               snapshot: null,
@@ -11468,6 +11469,10 @@ export const useAppStore = create<AppState>()(
           persistedSettings?.appShellMode ??
             (legacyLayoutZenMode ? "zen" : defaultSettings.appShellMode),
         );
+        state.settings.showPresetBar =
+          typeof raw.showPresetBar === "boolean"
+            ? raw.showPresetBar
+            : defaultSettings.showPresetBar;
         state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
           raw.sidebarArtworkMode,
         );
