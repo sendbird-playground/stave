@@ -50,15 +50,26 @@ async function createFsApi(args: { rootPath: string; filePath: string }) {
 
   async function readWithRevision() {
     const fullPath = path.join(args.rootPath, args.filePath);
-    const [content, fileStat] = await Promise.all([readFile(fullPath, "utf8"), stat(fullPath)]);
+    const [content, fileStat] = await Promise.all([
+      readFile(fullPath, "utf8"),
+      stat(fullPath),
+    ]);
     return {
       content,
-      revision: buildRevision({ size: fileStat.size, mtimeMs: fileStat.mtimeMs }),
+      revision: buildRevision({
+        size: fileStat.size,
+        mtimeMs: fileStat.mtimeMs,
+      }),
     };
   }
 
   return {
-    pickRoot: async () => ({ ok: true, rootPath: args.rootPath, rootName: "fixture", files: [args.filePath] }),
+    pickRoot: async () => ({
+      ok: true,
+      rootPath: args.rootPath,
+      rootName: "fixture",
+      files: [args.filePath],
+    }),
     listFiles: async () => ({ ok: true, files: [args.filePath] }),
     readFile: async (req: { rootPath: string; filePath: string }) => {
       if (!resolveRequestedFilePath(req.filePath)) {
@@ -67,7 +78,12 @@ async function createFsApi(args: { rootPath: string; filePath: string }) {
       const file = await readWithRevision();
       return { ok: true, content: file.content, revision: file.revision };
     },
-    writeFile: async (req: { rootPath: string; filePath: string; content: string; expectedRevision?: string | null }) => {
+    writeFile: async (req: {
+      rootPath: string;
+      filePath: string;
+      content: string;
+      expectedRevision?: string | null;
+    }) => {
       const fullPath = resolveRequestedFilePath(req.filePath);
       if (!fullPath) {
         return { ok: false };
@@ -98,7 +114,15 @@ async function setupStore(args: { rootPath: string; filePath: string }) {
     import("../src/store/app.store"),
   ]);
 
-  await (workspaceFsAdapter as { setRoot?: (args: { rootPath: string; rootName: string; files: string[] }) => Promise<void> }).setRoot?.({
+  await (
+    workspaceFsAdapter as {
+      setRoot?: (args: {
+        rootPath: string;
+        rootName: string;
+        files: string[];
+      }) => Promise<void>;
+    }
+  ).setRoot?.({
     rootPath: args.rootPath,
     rootName: "fixture",
     files: [args.filePath],
@@ -106,7 +130,9 @@ async function setupStore(args: { rootPath: string; filePath: string }) {
 
   useAppStore.setState((state) => ({
     ...state,
-    workspaces: [{ id: "ws-main", name: "main", updatedAt: new Date().toISOString() }],
+    workspaces: [
+      { id: "ws-main", name: "main", updatedAt: new Date().toISOString() },
+    ],
     activeWorkspaceId: "ws-main",
     projectPath: args.rootPath,
     workspacePathById: { "ws-main": args.rootPath },
@@ -142,7 +168,35 @@ describe("editor save/conflict behavior", () => {
       },
     });
 
-    expect(useAppStore.getState().layout.editorPanelWidth).toBe(MIN_EDITOR_PANEL_WIDTH);
+    expect(useAppStore.getState().layout.editorPanelWidth).toBe(
+      MIN_EDITOR_PANEL_WIDTH,
+    );
+  });
+
+  test("keeps markdown preview and diff mode mutually exclusive", async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), "stave-editor-"));
+    const filePath = "README.md";
+    await writeFile(path.join(rootPath, filePath), "# Hello\n", "utf8");
+
+    const { useAppStore } = await setupStore({ rootPath, filePath });
+    await useAppStore.getState().openFileFromTree({ filePath });
+
+    useAppStore.getState().toggleEditorMarkdownPreviewMode();
+    expect(useAppStore.getState().layout.editorMarkdownPreviewMode).toBe(true);
+    expect(useAppStore.getState().layout.editorDiffMode).toBe(false);
+
+    useAppStore.getState().openDiffInEditor({
+      editorTabId: "scm-diff:README.md",
+      filePath,
+      oldContent: "# Before\n",
+      newContent: "# After\n",
+    });
+    expect(useAppStore.getState().layout.editorDiffMode).toBe(true);
+    expect(useAppStore.getState().layout.editorMarkdownPreviewMode).toBe(false);
+
+    useAppStore.getState().toggleEditorMarkdownPreviewMode();
+    expect(useAppStore.getState().layout.editorMarkdownPreviewMode).toBe(true);
+    expect(useAppStore.getState().layout.editorDiffMode).toBe(false);
   });
 
   test("keeps chat-opened diff tabs clean until the modified side actually changes", async () => {
@@ -159,15 +213,31 @@ describe("editor save/conflict behavior", () => {
       newContent: "after\n",
     });
 
-    let tab = useAppStore.getState().editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
+    let tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
     expect(tab?.isDirty).toBe(false);
 
-    useAppStore.getState().updateEditorContent({ tabId: "chat-diff:msg-1:0:note.txt", content: "after\n" });
-    tab = useAppStore.getState().editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
+    useAppStore
+      .getState()
+      .updateEditorContent({
+        tabId: "chat-diff:msg-1:0:note.txt",
+        content: "after\n",
+      });
+    tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
     expect(tab?.isDirty).toBe(false);
 
-    useAppStore.getState().updateEditorContent({ tabId: "chat-diff:msg-1:0:note.txt", content: "after plus edit\n" });
-    tab = useAppStore.getState().editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
+    useAppStore
+      .getState()
+      .updateEditorContent({
+        tabId: "chat-diff:msg-1:0:note.txt",
+        content: "after plus edit\n",
+      });
+    tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
     expect(tab?.isDirty).toBe(true);
   });
 
@@ -191,7 +261,9 @@ describe("editor save/conflict behavior", () => {
       newContent: "after again\n",
     });
 
-    const tab = useAppStore.getState().editorTabs.find((item) => item.id === "scm-diff:note.txt");
+    const tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === "scm-diff:note.txt");
     expect(tab?.originalContent).toBe("before again\n");
     expect(tab?.content).toBe("after again\n");
     expect(tab?.savedContent).toBe("after again\n");
@@ -222,7 +294,9 @@ describe("editor save/conflict behavior", () => {
       newContent: "after again\n",
     });
 
-    const tab = useAppStore.getState().editorTabs.find((item) => item.id === "scm-diff:note.txt");
+    const tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === "scm-diff:note.txt");
     expect(tab?.originalContent).toBe("before\n");
     expect(tab?.content).toBe("after with local edit\n");
     expect(tab?.isDirty).toBe(true);
@@ -240,7 +314,9 @@ describe("editor save/conflict behavior", () => {
     expect(opened).toBeDefined();
     expect(opened.baseRevision).toBeString();
 
-    useAppStore.getState().updateEditorContent({ tabId: opened.id, content: "local change\n" });
+    useAppStore
+      .getState()
+      .updateEditorContent({ tabId: opened.id, content: "local change\n" });
     await Bun.sleep(5);
     await writeFile(fullPath, "external change\n", "utf8");
 
@@ -248,7 +324,9 @@ describe("editor save/conflict behavior", () => {
     expect(saved.ok).toBe(false);
     expect(saved.conflict).toBe(true);
 
-    const tab = useAppStore.getState().editorTabs.find((item) => item.id === opened.id);
+    const tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === opened.id);
     expect(tab?.hasConflict).toBe(true);
     expect(tab?.isDirty).toBe(true);
     expect(tab?.content).toBe("local change\n");
@@ -260,7 +338,9 @@ describe("editor save/conflict behavior", () => {
     await writeFile(path.join(rootPath, filePath), "alpha\n", "utf8");
 
     const { useAppStore } = await setupStore({ rootPath, filePath });
-    await useAppStore.getState().openFileFromTree({ filePath: path.join(rootPath, filePath) });
+    await useAppStore
+      .getState()
+      .openFileFromTree({ filePath: path.join(rootPath, filePath) });
 
     const opened = useAppStore.getState().editorTabs[0];
     expect(opened).toBeDefined();
@@ -305,17 +385,23 @@ describe("editor save/conflict behavior", () => {
     await writeFile(fullPath, "changed on disk\n", "utf8");
     await useAppStore.getState().checkOpenTabConflicts();
 
-    let tab = useAppStore.getState().editorTabs.find((item) => item.id === opened.id);
+    let tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === opened.id);
     expect(tab?.hasConflict).toBe(false);
     expect(tab?.isDirty).toBe(false);
     expect(tab?.content).toBe("changed on disk\n");
 
-    useAppStore.getState().updateEditorContent({ tabId: opened.id, content: "dirty local edit\n" });
+    useAppStore
+      .getState()
+      .updateEditorContent({ tabId: opened.id, content: "dirty local edit\n" });
     await Bun.sleep(5);
     await writeFile(fullPath, "changed on disk again\n", "utf8");
     await useAppStore.getState().checkOpenTabConflicts();
 
-    tab = useAppStore.getState().editorTabs.find((item) => item.id === opened.id);
+    tab = useAppStore
+      .getState()
+      .editorTabs.find((item) => item.id === opened.id);
     expect(tab?.hasConflict).toBe(true);
     expect(tab?.isDirty).toBe(true);
     expect(tab?.content).toBe("dirty local edit\n");
