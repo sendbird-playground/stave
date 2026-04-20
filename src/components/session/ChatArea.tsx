@@ -250,7 +250,10 @@ function ChatAreaImpl() {
   return (
     <div {...sessionAreaProps}>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="relative min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {/* The message pane must be a flex column so `ChatPanel`'s
+              `Conversation` root (`flex min-h-0 flex-1`) can claim the
+              remaining height and keep its internal list scrollable. */}
           <RenderProfiler id="ChatPanel" thresholdMs={8}>
             <ChatPanel />
           </RenderProfiler>
