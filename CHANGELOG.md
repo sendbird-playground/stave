@@ -1,3 +1,16 @@
+## [0.4.1](https://github.com/sendbird-playground/stave/compare/v0.4.0...v0.4.1) (2026-04-20)
+
+### Highlights
+
+- keep completed Coliseum arena runs intact across workspace snapshot and runtime-cache compaction so parent, branch, and reviewer messages no longer disappear after a run settles
+- add regression coverage for Coliseum snapshot persistence and runtime cache retention, including reviewer-task retention while arena state remains active
+- restore the public docs build by publishing the Stave Model Router page in the public docs index so GitHub Pages deployment succeeds again
+
+### References
+
+- [#512](https://github.com/sendbird-playground/stave/pull/512)
+- [#511](https://github.com/sendbird-playground/stave/pull/511)
+
 ## [0.4.0](https://github.com/sendbird-playground/stave/compare/v0.3.9...v0.4.0) (2026-04-20)
 
 ### Highlights
@@ -26,6 +39,7 @@
 - [#507](https://github.com/sendbird-playground/stave/pull/507)
 - [#508](https://github.com/sendbird-playground/stave/pull/508)
 - [#509](https://github.com/sendbird-playground/stave/pull/509)
+
 ## [0.3.9](https://github.com/sendbird-playground/stave/compare/v0.3.8...v0.3.9) (2026-04-19)
 
 ### Highlights
@@ -46,6 +60,7 @@
 - [#492](https://github.com/sendbird-playground/stave/pull/492)
 - [#493](https://github.com/sendbird-playground/stave/pull/493)
 - [#494](https://github.com/sendbird-playground/stave/pull/494)
+
 ## [0.3.8](https://github.com/sendbird-playground/stave/compare/v0.3.7...v0.3.8) (2026-04-17)
 
 ### Highlights
