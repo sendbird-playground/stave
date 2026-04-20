@@ -188,6 +188,15 @@ export function buildCurrentTaskAwarenessRetrievedContext(args: {
     "- new workspace plan files belong under `.stave/context/plans`",
     "- use `.stave/context/plans/<taskIdPrefix>_<timestamp>.md` for new plan markdown files",
   ];
+  const handoffProcedureLines = [
+    "When you create a new Stave workspace to hand off follow-up work:",
+    "1. Use `stave_create_workspace` to create the target workspace and capture its `root` path.",
+    "2. Write a plan file at the target's `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`. Use the `Write` tool directly against the new worktree root returned by `stave_create_workspace`. Do NOT put the plan body into Notes.",
+    "3. If no task id exists yet, use a placeholder prefix such as `handoff` and rename the file to `<newTaskIdPrefix>_<timestamp>.md` once a task id is assigned.",
+    "4. In the target workspace's Notes, append ONLY a short pointer like \"See plan: .stave/context/plans/<filename>.md\". Do not duplicate the plan body into Notes.",
+    "5. Target Todos should be terse action items that point back at the plan file, not a re-statement of the plan.",
+    "6. The plan file must describe ONLY the handoff sub-task and the context needed to execute it. Do NOT copy the source workspace's plan, notes, or todos verbatim — the source workspace's plan stays in the source. Cite the source by `workspaceId`/`taskId` when helpful.",
+  ];
 
   return {
     type: "retrieved_context",
@@ -211,6 +220,9 @@ export function buildCurrentTaskAwarenessRetrievedContext(args: {
       "",
       "Workspace Conventions:",
       ...workspaceConventionLines,
+      "",
+      "Handoff procedure:",
+      ...handoffProcedureLines,
       "",
       "Visible tasks in this workspace:",
       ...(visibleTasks.length > 0 ? visibleTasks.map((task) => `- ${task}`) : ["- none"]),

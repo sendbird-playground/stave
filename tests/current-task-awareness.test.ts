@@ -62,6 +62,10 @@ describe("buildCurrentTaskAwarenessRetrievedContext", () => {
     expect(context.content).toContain("Summarise the latest workspace activity in the Information panel. | Prepared the UI plan and identified the Information panel integration points.");
     expect(context.content).toContain("Workspace Conventions:");
     expect(context.content).toContain("new workspace plan files belong under `.stave/context/plans`");
+    expect(context.content).toContain("Handoff procedure:");
+    expect(context.content).toContain("Write a plan file at the target's `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`");
+    expect(context.content).toContain("Do NOT copy the source workspace's plan, notes, or todos verbatim");
+    expect(context.content).toContain("append ONLY a short pointer like \"See plan:");
     expect(context.content).toContain("Prompt Input Redesign | node 1:2 | https://www.figma.com/design/FILE123/Prompt?node-id=1-2 | Latest approved mock");
   });
 
