@@ -153,4 +153,17 @@ describe("buildAssistantTrace", () => {
     expect(trace.responseParts).toEqual([]);
     expect(trace.showStreamingPlaceholder).toBe(true);
   });
+
+  test("hides the transient model-request system step from Claude trace UI", () => {
+    const trace = buildAssistantTrace({
+      message: createAssistantMessage({
+        isStreaming: true,
+        parts: [{ type: "system_event", content: "Sending request to model..." }],
+      }),
+    });
+
+    expect(trace.entries).toEqual([]);
+    expect(trace.responseParts).toEqual([]);
+    expect(trace.showStreamingPlaceholder).toBe(true);
+  });
 });
