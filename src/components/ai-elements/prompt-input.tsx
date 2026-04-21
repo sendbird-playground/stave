@@ -971,7 +971,7 @@ export function PromptInput(args: PromptInputProps) {
 
   if (pendingUserInput && onUserInputSubmit && onUserInputDeny) {
     return (
-      <div className="space-y-3 rounded-xl border border-primary/40 bg-background/95 p-4">
+      <div className="space-y-3 rounded-xl border border-primary/40 bg-background/95 p-3">
         <UserInputCard
           toolName={pendingUserInput.part.toolName}
           questions={pendingUserInput.part.questions}
@@ -1003,7 +1003,7 @@ export function PromptInput(args: PromptInputProps) {
           "relative space-y-3 transition-[border-color,box-shadow,background-color]",
           minimal
             ? "space-y-2 border-0 border-t border-border/60 bg-transparent p-0 pt-3 focus-within:border-border/60"
-            : "rounded-xl border border-border/70 bg-background/95 p-4 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
+            : "rounded-xl border border-border/70 bg-background/95 p-3 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
         )}
       >
         {!minimal && promptSuggestions && promptSuggestions.length > 0 ? (
