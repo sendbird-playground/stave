@@ -23,12 +23,26 @@ import {
 } from "lucide-react";
 import { getProviderLabel } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
+import {
+  formatAppShortcutLabel,
+  hasAppShortcutCommandId,
+  type AppShortcutKeys,
+} from "@/lib/app-shortcuts";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import type { WorkspacePrStatus } from "@/lib/pr-status";
 
-export type CommandPaletteGroup = "navigation" | "view" | "task" | "provider" | "settings" | "external";
+export type CommandPaletteGroup =
+  | "navigation"
+  | "view"
+  | "task"
+  | "provider"
+  | "settings"
+  | "external";
 
-export const COMMAND_PALETTE_GROUP_LABELS: Record<CommandPaletteGroup | "pinned" | "recent", string> = {
+export const COMMAND_PALETTE_GROUP_LABELS: Record<
+  CommandPaletteGroup | "pinned" | "recent",
+  string
+> = {
   pinned: "Pinned",
   recent: "Recent",
   navigation: "Navigation",
@@ -82,7 +96,13 @@ export interface CommandPaletteProjectSummary {
 
 export interface CommandPaletteLayoutState {
   editorVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes" | "information" | "skills" | "scripts" | "lens";
+  sidebarOverlayTab:
+    | "explorer"
+    | "changes"
+    | "information"
+    | "skills"
+    | "scripts"
+    | "lens";
   sidebarOverlayVisible: boolean;
   terminalDocked: boolean;
   workspaceSidebarCollapsed: boolean;
@@ -103,7 +123,10 @@ export interface CommandPaletteCommandHandlers {
   openInVSCode: (path: string) => Promise<void> | void;
   openKeyboardShortcuts: () => void;
   openProject: (projectPath: string) => Promise<void> | void;
-  openSettings: (options?: { projectPath?: string | null; section?: SectionId }) => void;
+  openSettings: (options?: {
+    projectPath?: string | null;
+    section?: SectionId;
+  }) => void;
   refreshProjectFiles: () => Promise<void> | void;
   refreshWorkspaces: () => Promise<void> | void;
   revealInFileManager: (path: string) => Promise<void> | void;
@@ -127,6 +150,7 @@ export interface CommandPaletteRuntimeContext {
   activeWorkspaceBranch?: string;
   activeWorkspaceIsDefault: boolean;
   activeWorkspacePrStatus: WorkspacePrStatus;
+  appShortcutKeys: AppShortcutKeys;
   hasActiveTurn: boolean;
   layout: CommandPaletteLayoutState;
   modifierLabel: "Cmd" | "Ctrl";
@@ -166,7 +190,11 @@ interface CommandPaletteCoreCommandDefinition {
   build: (args: CommandPaletteRuntimeContext) => CommandPaletteAction | null;
   icon?: LucideIcon;
   keywords?: string[];
-  shortcut?: string | ((modifierLabel: CommandPaletteRuntimeContext["modifierLabel"]) => string);
+  shortcut?:
+    | string
+    | ((
+        modifierLabel: CommandPaletteRuntimeContext["modifierLabel"],
+      ) => string);
 }
 
 export interface CommandPaletteCommandMetadata {
@@ -178,18 +206,33 @@ export interface CommandPaletteCommandMetadata {
   shortcut?: string;
 }
 
-export type CommandPaletteContributor = (args: CommandPaletteRuntimeContext) => CommandPaletteAction[];
+export type CommandPaletteContributor = (
+  args: CommandPaletteRuntimeContext,
+) => CommandPaletteAction[];
 
 const commandPaletteContributors = new Set<CommandPaletteContributor>();
 
-function formatShortcut(
-  shortcut: CommandPaletteCoreCommandDefinition["shortcut"],
-  modifierLabel: CommandPaletteRuntimeContext["modifierLabel"],
-) {
+function formatShortcut(args: {
+  commandId: string;
+  shortcut: CommandPaletteCoreCommandDefinition["shortcut"];
+  modifierLabel: CommandPaletteRuntimeContext["modifierLabel"] | "Cmd/Ctrl";
+  appShortcutKeys?: AppShortcutKeys;
+}) {
+  if (hasAppShortcutCommandId(args.commandId)) {
+    return formatAppShortcutLabel({
+      actionId: args.commandId,
+      modifierLabel: args.modifierLabel,
+      shortcutKeys: args.appShortcutKeys,
+    });
+  }
+
+  const { shortcut, modifierLabel } = args;
   if (!shortcut) {
     return undefined;
   }
-  return typeof shortcut === "function" ? shortcut(modifierLabel) : shortcut;
+  return typeof shortcut === "function"
+    ? shortcut(modifierLabel as CommandPaletteRuntimeContext["modifierLabel"])
+    : shortcut;
 }
 
 function formatTaskTitle(title: string) {
@@ -212,7 +255,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     icon: Search,
     keywords: ["file", "quick open", "go to file", "search"],
     shortcut: (modifierLabel) => `${modifierLabel}+P`,
-    build: (args) => (
+    build: (args) =>
       args.projectPath
         ? {
             id: "navigation.quick-open-file",
@@ -225,8 +268,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.focusFileSearch,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "navigation.home",
@@ -235,6 +277,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "navigation",
     icon: Home,
     keywords: ["home", "dashboard", "clear task selection"],
+    shortcut: (modifierLabel) => `${modifierLabel}+K H`,
     build: (args) => ({
       id: "navigation.home",
       title: "Go Home",
@@ -242,6 +285,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "navigation",
       icon: Home,
       keywords: ["home", "dashboard", "clear task selection"],
+      shortcut: `${args.modifierLabel}+K H`,
       run: args.commands.clearTaskSelection,
       source: "core",
     }),
@@ -253,6 +297,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "navigation",
     icon: Sparkles,
     keywords: ["muse", "assistant", "operator", "global chat", "widget"],
+    shortcut: (modifierLabel) => `${modifierLabel}+K M`,
     build: (args) => ({
       id: "navigation.open-stave-muse",
       title: "Open Stave Muse",
@@ -260,6 +305,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "navigation",
       icon: Sparkles,
       keywords: ["muse", "assistant", "operator", "global chat", "widget"],
+      shortcut: `${args.modifierLabel}+K M`,
       run: args.commands.openStaveMuse,
       source: "core",
     }),
@@ -267,17 +313,28 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
   {
     id: "navigation.latest-completed-turn-task",
     title: "Go to Latest Completed Turn Task",
-    description: "Jump to the task with the most recently completed turn across workspaces.",
+    description:
+      "Jump to the task with the most recently completed turn across workspaces.",
     group: "navigation",
     icon: History,
-    keywords: ["latest completed turn", "recent task", "last completed", "recent turn"],
+    keywords: [
+      "latest completed turn",
+      "recent task",
+      "last completed",
+      "recent turn",
+    ],
     build: (args) => ({
       id: "navigation.latest-completed-turn-task",
       title: "Go to Latest Completed Turn Task",
       subtitle: "Jump to the newest completed task run.",
       group: "navigation",
       icon: History,
-      keywords: ["latest completed turn", "recent task", "last completed", "recent turn"],
+      keywords: [
+        "latest completed turn",
+        "recent task",
+        "last completed",
+        "recent turn",
+      ],
       run: args.commands.openLatestCompletedTurnTask,
       source: "core",
     }),
@@ -309,7 +366,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "task",
     icon: GitPullRequest,
     keywords: ["create pr", "pull request", "github", "open pr"],
-    build: (args) => (
+    build: (args) =>
       !args.activeWorkspaceIsDefault && args.activeWorkspacePrStatus === "no_pr"
         ? {
             id: "task.create-pr",
@@ -323,19 +380,20 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.createPullRequest,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "task.continue-workspace",
     title: "Continue in New Workspace",
-    description: "Create a follow-up workspace with a continuation brief attached.",
+    description:
+      "Create a follow-up workspace with a continuation brief attached.",
     group: "task",
     icon: GitBranch,
     keywords: ["continue", "workspace", "follow up", "branch"],
-    build: (args) => (
-      !args.activeWorkspaceIsDefault
-        && (args.activeWorkspacePrStatus === "merged" || args.activeWorkspacePrStatus === "closed_unmerged")
+    build: (args) =>
+      !args.activeWorkspaceIsDefault &&
+      (args.activeWorkspacePrStatus === "merged" ||
+        args.activeWorkspacePrStatus === "closed_unmerged")
         ? {
             id: "task.continue-workspace",
             title: "Continue in New Workspace",
@@ -348,8 +406,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.continueWorkspace,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "task.stop-active-turn",
@@ -358,7 +415,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "task",
     icon: CommandIcon,
     keywords: ["stop", "abort", "cancel generation"],
-    build: (args) => (
+    build: (args) =>
       args.hasActiveTurn
         ? {
             id: "task.stop-active-turn",
@@ -370,8 +427,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.stopActiveTurn,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "view.toggle-workspace-sidebar",
@@ -383,7 +439,9 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     shortcut: (modifierLabel) => `${modifierLabel}+B`,
     build: (args) => ({
       id: "view.toggle-workspace-sidebar",
-      title: args.layout.workspaceSidebarCollapsed ? "Expand Workspace Sidebar" : "Collapse Workspace Sidebar",
+      title: args.layout.workspaceSidebarCollapsed
+        ? "Expand Workspace Sidebar"
+        : "Collapse Workspace Sidebar",
       subtitle: "Toggle the left project and workspace list.",
       group: "view",
       icon: PanelLeft,
@@ -403,9 +461,11 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     shortcut: (modifierLabel) => `${modifierLabel}+Shift+B`,
     build: (args) => ({
       id: "view.toggle-changes-panel",
-      title: args.layout.sidebarOverlayVisible && args.layout.sidebarOverlayTab === "changes"
-        ? "Hide Source Control Panel"
-        : "Show Source Control Panel",
+      title:
+        args.layout.sidebarOverlayVisible &&
+        args.layout.sidebarOverlayTab === "changes"
+          ? "Hide Source Control Panel"
+          : "Show Source Control Panel",
       subtitle: "Toggle the source control overlay on the right rail.",
       group: "view",
       icon: Layers3,
@@ -458,16 +518,19 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
   {
     id: "view.show-information",
     title: "Toggle Information Panel",
-    description: "Show or hide the workspace information overlay on the right rail.",
+    description:
+      "Show or hide the workspace information overlay on the right rail.",
     group: "view",
     icon: LibraryBig,
     keywords: ["information", "notes", "jira", "figma", "slack"],
     shortcut: (modifierLabel) => `${modifierLabel}+I`,
     build: (args) => ({
       id: "view.show-information",
-      title: args.layout.sidebarOverlayVisible && args.layout.sidebarOverlayTab === "information"
-        ? "Hide Information Panel"
-        : "Show Information Panel",
+      title:
+        args.layout.sidebarOverlayVisible &&
+        args.layout.sidebarOverlayTab === "information"
+          ? "Hide Information Panel"
+          : "Show Information Panel",
       subtitle: "Open notes, links, plans, and structured workspace fields.",
       group: "view",
       icon: LibraryBig,
@@ -484,6 +547,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "view",
     icon: Sparkles,
     keywords: ["scripts", "hooks", "services", "orbit"],
+    shortcut: (modifierLabel) => `${modifierLabel}+K S`,
     build: (args) => ({
       id: "view.show-scripts",
       title: "Show Scripts Panel",
@@ -491,6 +555,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "view",
       icon: Sparkles,
       keywords: ["scripts", "hooks", "services", "orbit"],
+      shortcut: `${args.modifierLabel}+K S`,
       run: () => args.commands.showOverlayTab("scripts"),
       source: "core",
     }),
@@ -502,13 +567,16 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "view",
     icon: Globe,
     keywords: ["lens", "browser", "preview", "inspect", "right rail"],
+    shortcut: (modifierLabel) => `${modifierLabel}+K L`,
     build: (args) => ({
       id: "view.show-lens",
       title: "Show Lens Panel",
-      subtitle: "Open the embedded browser for preview, inspection, and element picking.",
+      subtitle:
+        "Open the embedded browser for preview, inspection, and element picking.",
       group: "view",
       icon: Globe,
       keywords: ["lens", "browser", "preview", "inspect", "right rail"],
+      shortcut: `${args.modifierLabel}+K L`,
       run: () => args.commands.showOverlayTab("lens"),
       source: "core",
     }),
@@ -556,7 +624,8 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
   {
     id: "view.toggle-zen-mode",
     title: "Toggle Zen Mode",
-    description: "Hide surrounding workspace chrome and focus on chat and results.",
+    description:
+      "Hide surrounding workspace chrome and focus on chat and results.",
     group: "view",
     icon: Focus,
     keywords: ["zen", "focus", "distraction free", "full screen", "chat only"],
@@ -567,7 +636,13 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       subtitle: "Focus the app on chat, results, and the prompt composer.",
       group: "view",
       icon: Focus,
-      keywords: ["zen", "focus", "distraction free", "full screen", "chat only"],
+      keywords: [
+        "zen",
+        "focus",
+        "distraction free",
+        "full screen",
+        "chat only",
+      ],
       shortcut: `${args.modifierLabel}+K Z`,
       run: args.commands.toggleZenMode,
       source: "core",
@@ -581,7 +656,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     icon: Save,
     keywords: ["save", "editor", "write file"],
     shortcut: (modifierLabel) => `${modifierLabel}+S`,
-    build: (args) => (
+    build: (args) =>
       args.activeEditorTabId
         ? {
             id: "task.save-file",
@@ -594,8 +669,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.saveActiveEditor,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "provider.set.claude-code",
@@ -604,7 +678,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "provider",
     icon: Bot,
     keywords: ["provider", "claude", "model"],
-    build: (args) => (
+    build: (args) =>
       args.activeTaskId
         ? {
             id: "provider.set.claude-code",
@@ -613,11 +687,11 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             group: "provider",
             icon: Bot,
             keywords: ["provider", "claude", "model"],
-            run: () => args.commands.setTaskProvider(args.activeTaskId, "claude-code"),
+            run: () =>
+              args.commands.setTaskProvider(args.activeTaskId, "claude-code"),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "provider.set.codex",
@@ -626,7 +700,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "provider",
     icon: Bot,
     keywords: ["provider", "codex", "model"],
-    build: (args) => (
+    build: (args) =>
       args.activeTaskId
         ? {
             id: "provider.set.codex",
@@ -635,11 +709,11 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             group: "provider",
             icon: Bot,
             keywords: ["provider", "codex", "model"],
-            run: () => args.commands.setTaskProvider(args.activeTaskId, "codex"),
+            run: () =>
+              args.commands.setTaskProvider(args.activeTaskId, "codex"),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "provider.set.stave",
@@ -648,7 +722,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "provider",
     icon: Bot,
     keywords: ["provider", "stave", "router", "auto"],
-    build: (args) => (
+    build: (args) =>
       args.activeTaskId
         ? {
             id: "provider.set.stave",
@@ -657,11 +731,11 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             group: "provider",
             icon: Bot,
             keywords: ["provider", "stave", "router", "auto"],
-            run: () => args.commands.setTaskProvider(args.activeTaskId, "stave"),
+            run: () =>
+              args.commands.setTaskProvider(args.activeTaskId, "stave"),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "settings.open",
@@ -764,7 +838,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "navigation",
     icon: RefreshCw,
     keywords: ["refresh", "files", "project"],
-    build: (args) => (
+    build: (args) =>
       args.projectPath
         ? {
             id: "workspace.refresh-files",
@@ -776,8 +850,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.refreshProjectFiles,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "workspace.refresh-workspaces",
@@ -786,7 +859,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "navigation",
     icon: RefreshCw,
     keywords: ["refresh", "workspace", "worktree"],
-    build: (args) => (
+    build: (args) =>
       args.projectPath
         ? {
             id: "workspace.refresh-workspaces",
@@ -798,8 +871,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: args.commands.refreshWorkspaces,
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "external.reveal-active-workspace",
@@ -808,7 +880,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "external",
     icon: FolderOpen,
     keywords: ["finder", "explorer", "file manager", "workspace"],
-    build: (args) => (
+    build: (args) =>
       args.workspacePath
         ? {
             id: "external.reveal-active-workspace",
@@ -820,8 +892,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: () => args.commands.revealInFileManager(args.workspacePath!),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "external.open-active-workspace-vscode",
@@ -830,7 +901,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "external",
     icon: FolderOpen,
     keywords: ["external", "vscode", "editor"],
-    build: (args) => (
+    build: (args) =>
       args.workspacePath
         ? {
             id: "external.open-active-workspace-vscode",
@@ -842,8 +913,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: () => args.commands.openInVSCode(args.workspacePath!),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "external.open-active-workspace-terminal",
@@ -852,7 +922,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "external",
     icon: Terminal,
     keywords: ["external", "terminal", "shell"],
-    build: (args) => (
+    build: (args) =>
       args.workspacePath
         ? {
             id: "external.open-active-workspace-terminal",
@@ -864,17 +934,17 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: () => args.commands.openInTerminal(args.workspacePath!),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
   {
     id: "external.open-active-workspace-ghostty",
     title: "Open Active Workspace in Ghostty",
-    description: "Open the active workspace folder in the Ghostty terminal app.",
+    description:
+      "Open the active workspace folder in the Ghostty terminal app.",
     group: "external",
     icon: Terminal,
     keywords: ["external", "ghostty", "terminal"],
-    build: (args) => (
+    build: (args) =>
       args.workspacePath
         ? {
             id: "external.open-active-workspace-ghostty",
@@ -886,12 +956,13 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             run: () => args.commands.openInGhostty(args.workspacePath!),
             source: "core",
           }
-        : null
-    ),
+        : null,
   },
 ];
 
-function buildDynamicActions(args: CommandPaletteRuntimeContext): CommandPaletteAction[] {
+function buildDynamicActions(
+  args: CommandPaletteRuntimeContext,
+): CommandPaletteAction[] {
   const actions: CommandPaletteAction[] = [];
 
   for (const task of args.tasks) {
@@ -919,7 +990,12 @@ function buildDynamicActions(args: CommandPaletteRuntimeContext): CommandPalette
         : (workspace.branch ?? workspace.path ?? "Workspace"),
       group: "navigation",
       icon: FolderOpen,
-      keywords: ["switch workspace", "workspace", workspace.name, workspace.branch ?? ""],
+      keywords: [
+        "switch workspace",
+        "workspace",
+        workspace.name,
+        workspace.branch ?? "",
+      ],
       run: () => args.commands.switchWorkspace(workspace.id),
       source: "dynamic",
       customizable: false,
@@ -933,7 +1009,12 @@ function buildDynamicActions(args: CommandPaletteRuntimeContext): CommandPalette
       subtitle: project.isCurrent ? "Current project" : project.projectPath,
       group: "navigation",
       icon: LibraryBig,
-      keywords: ["open project", "project", project.projectName, project.projectPath],
+      keywords: [
+        "open project",
+        "project",
+        project.projectName,
+        project.projectPath,
+      ],
       run: () => args.commands.openProject(project.projectPath),
       source: "dynamic",
       customizable: false,
@@ -944,11 +1025,15 @@ function buildDynamicActions(args: CommandPaletteRuntimeContext): CommandPalette
 }
 
 function sortActions(left: CommandPaletteAction, right: CommandPaletteAction) {
-  const groupDelta = COMMAND_PALETTE_GROUP_ORDER.indexOf(left.group) - COMMAND_PALETTE_GROUP_ORDER.indexOf(right.group);
+  const groupDelta =
+    COMMAND_PALETTE_GROUP_ORDER.indexOf(left.group) -
+    COMMAND_PALETTE_GROUP_ORDER.indexOf(right.group);
   if (groupDelta !== 0) {
     return groupDelta;
   }
-  return left.title.localeCompare(right.title, undefined, { sensitivity: "base" });
+  return left.title.localeCompare(right.title, undefined, {
+    sensitivity: "base",
+  });
 }
 
 function dedupeActions(actions: CommandPaletteAction[]) {
@@ -961,12 +1046,32 @@ function dedupeActions(actions: CommandPaletteAction[]) {
 
 function buildCoreActions(args: CommandPaletteRuntimeContext) {
   return coreCommandDefinitions
-    .map((definition) => definition.build(args))
-    .filter((definition): definition is CommandPaletteAction => definition !== null)
-    .map((action) => ({ ...action, customizable: action.customizable ?? true }));
+    .map<CommandPaletteAction | null>((definition) => {
+      const action = definition.build(args);
+      if (!action) {
+        return null;
+      }
+
+      return {
+        ...action,
+        shortcut:
+          formatShortcut({
+            commandId: definition.id,
+            shortcut: definition.shortcut,
+            modifierLabel: args.modifierLabel,
+            appShortcutKeys: args.appShortcutKeys,
+          }) ?? action.shortcut,
+        customizable: action.customizable ?? true,
+      } satisfies CommandPaletteAction;
+    })
+    .filter(
+      (definition): definition is CommandPaletteAction => definition !== null,
+    );
 }
 
-export function registerCommandPaletteContributor(contributor: CommandPaletteContributor) {
+export function registerCommandPaletteContributor(
+  contributor: CommandPaletteContributor,
+) {
   commandPaletteContributors.add(contributor);
   return () => {
     commandPaletteContributors.delete(contributor);
@@ -985,10 +1090,16 @@ export function listCommandPaletteActions(args: CommandPaletteRuntimeContext) {
   ]);
 }
 
-export function buildCommandPaletteGroups(args: CommandPaletteRuntimeContext): CommandPaletteGroupSection[] {
+export function buildCommandPaletteGroups(
+  args: CommandPaletteRuntimeContext,
+): CommandPaletteGroupSection[] {
   const hiddenIds = new Set(args.preferences.hiddenIds);
-  const visibleActions = listCommandPaletteActions(args).filter((action) => !hiddenIds.has(action.id));
-  const byId = new Map(visibleActions.map((action) => [action.id, action] as const));
+  const visibleActions = listCommandPaletteActions(args).filter(
+    (action) => !hiddenIds.has(action.id),
+  );
+  const byId = new Map(
+    visibleActions.map((action) => [action.id, action] as const),
+  );
 
   const pinnedItems = args.preferences.pinnedIds
     .map((id) => byId.get(id))
@@ -1050,13 +1161,20 @@ export function recordRecentCommandPaletteAction(args: {
   ].slice(0, MAX_RECENT_COMMAND_IDS);
 }
 
-export function getCommandPaletteCoreCommands() {
+export function getCommandPaletteCoreCommands(args?: {
+  appShortcutKeys?: AppShortcutKeys;
+}) {
   return coreCommandDefinitions.map((definition) => ({
     id: definition.id,
     title: definition.title,
     description: definition.description,
     group: definition.group,
     keywords: definition.keywords ?? [],
-    shortcut: formatShortcut(definition.shortcut, "Cmd")?.replace(/^Cmd/, "Cmd/Ctrl"),
+    shortcut: formatShortcut({
+      commandId: definition.id,
+      shortcut: definition.shortcut,
+      modifierLabel: "Cmd/Ctrl",
+      appShortcutKeys: args?.appShortcutKeys,
+    }),
   }));
 }

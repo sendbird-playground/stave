@@ -64,6 +64,17 @@ import {
   resolveClaudeEffortForModelSwitch,
 } from "@/lib/providers/model-catalog";
 import {
+  APP_SHORTCUT_DEFINITIONS,
+  APP_SHORTCUT_KEY_OPTIONS,
+  DEFAULT_APP_SHORTCUT_KEYS,
+  assignAppShortcutKey,
+  buildAppShortcutSequences,
+  createEmptyAppShortcutKeys,
+  formatAppShortcutLabel,
+  normalizeAppShortcutKeys,
+  type AppShortcutCommandId,
+} from "@/lib/app-shortcuts";
+import {
   DEFAULT_MODEL_SHORTCUT_KEYS,
   describeModelShortcutKey,
   MODEL_SHORTCUT_SLOT_LABELS,
@@ -154,6 +165,7 @@ const MODEL_SHORTCUT_PROVIDER_IDS = [
   "stave",
   ...PROMPT_MODEL_PROVIDER_IDS,
 ] as const;
+const UNASSIGNED_APP_SHORTCUT_VALUE = "__shortcut_unassigned__";
 const UNASSIGNED_MODEL_SHORTCUT_VALUE = "__unassigned__";
 
 interface GitRemoteState {
@@ -966,9 +978,7 @@ function ThemeSection() {
   const borderBeamEnabled = useAppStore(
     (state) => state.settings.borderBeamEnabled,
   );
-  const borderBeamSize = useAppStore(
-    (state) => state.settings.borderBeamSize,
-  );
+  const borderBeamSize = useAppStore((state) => state.settings.borderBeamSize);
   const borderBeamVariant = useAppStore(
     (state) => state.settings.borderBeamVariant,
   );
@@ -2438,6 +2448,7 @@ function CommandPaletteSection() {
     commandPalettePinnedCommandIds,
     commandPaletteHiddenCommandIds,
     commandPaletteRecentCommandIds,
+    appShortcutKeys,
     modelShortcutKeys,
   ] = useAppStore(
     useShallow(
@@ -2447,12 +2458,23 @@ function CommandPaletteSection() {
           state.settings.commandPalettePinnedCommandIds,
           state.settings.commandPaletteHiddenCommandIds,
           state.settings.commandPaletteRecentCommandIds,
+          state.settings.appShortcutKeys,
           state.settings.modelShortcutKeys,
         ] as const,
     ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const commands = useMemo(() => getCommandPaletteCoreCommands(), []);
+  const normalizedAppShortcutKeys = useMemo(
+    () => normalizeAppShortcutKeys(appShortcutKeys),
+    [appShortcutKeys],
+  );
+  const commands = useMemo(
+    () =>
+      getCommandPaletteCoreCommands({
+        appShortcutKeys: normalizedAppShortcutKeys,
+      }),
+    [normalizedAppShortcutKeys],
+  );
   const normalizedModelShortcutKeys = useMemo(
     () => normalizeModelShortcutKeys(modelShortcutKeys),
     [modelShortcutKeys],
@@ -2516,11 +2538,23 @@ function CommandPaletteSection() {
     });
   }
 
+  function updateAppShortcut(actionId: AppShortcutCommandId, nextKey: string) {
+    updateSettings({
+      patch: {
+        appShortcutKeys: assignAppShortcutKey({
+          actionId,
+          shortcutKeys: normalizedAppShortcutKeys,
+          nextKey,
+        }),
+      },
+    });
+  }
+
   return (
     <>
       <SectionHeading
         title="Command Palette"
-        description="Configure the global command launcher and prompt-model hotkeys. This is separate from slash commands in the chat input."
+        description="Configure shell chords, the global command launcher, and prompt-model hotkeys. This is separate from slash commands in the chat input."
       />
       <SectionStack>
         <SettingsCard
@@ -2567,6 +2601,142 @@ function CommandPaletteSection() {
             >
               Reset Palette Settings
             </Button>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Shell Shortcut Chords"
+          description="Keep panel and navigation shortcuts on a single Cmd/Ctrl+K prefix so they do not collide with editor and IDE bindings."
+          titleAccessory={<Badge variant="secondary">Cmd/Ctrl+K</Badge>}
+        >
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                updateSettings({
+                  patch: {
+                    appShortcutKeys: { ...DEFAULT_APP_SHORTCUT_KEYS },
+                  },
+                })
+              }
+              disabled={APP_SHORTCUT_DEFINITIONS.every(
+                (definition) =>
+                  normalizedAppShortcutKeys[definition.commandId] ===
+                  definition.defaultKey,
+              )}
+            >
+              Reset Default Chords
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                updateSettings({
+                  patch: {
+                    appShortcutKeys: createEmptyAppShortcutKeys(),
+                  },
+                })
+              }
+              disabled={APP_SHORTCUT_DEFINITIONS.every(
+                (definition) =>
+                  normalizedAppShortcutKeys[definition.commandId].length === 0,
+              )}
+            >
+              Clear All Chords
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Assigning a key moves it off any conflicting shell command
+            automatically.
+          </p>
+          <div className="space-y-2.5">
+            {APP_SHORTCUT_DEFINITIONS.map((definition) => {
+              const selectedKey =
+                normalizedAppShortcutKeys[definition.commandId] ?? "";
+              const currentValue = selectedKey || UNASSIGNED_APP_SHORTCUT_VALUE;
+              const currentShortcutLabel =
+                formatAppShortcutLabel({
+                  actionId: definition.commandId,
+                  modifierLabel: "Cmd/Ctrl",
+                  shortcutKeys: normalizedAppShortcutKeys,
+                }) ?? "Disabled";
+              const shortcutSequences = buildAppShortcutSequences({
+                actionId: definition.commandId,
+                modifierLabel: "Cmd/Ctrl",
+                shortcutKeys: normalizedAppShortcutKeys,
+              });
+
+              return (
+                <div
+                  key={definition.commandId}
+                  className="rounded-lg border border-border/70 bg-card/60 p-3"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                    <div className="min-w-0 space-y-1 lg:w-64 lg:shrink-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {shortcutSequences.map((sequence, index) => (
+                          <div
+                            key={`${definition.commandId}-${sequence.join("-")}`}
+                            className="flex items-center gap-2"
+                          >
+                            {index > 0 ? (
+                              <span className="text-[11px] text-muted-foreground">
+                                then
+                              </span>
+                            ) : null}
+                            <Badge variant="secondary">
+                              {sequence.join(" + ")}
+                            </Badge>
+                          </div>
+                        ))}
+                        <p className="text-sm font-medium text-foreground">
+                          {definition.title}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {definition.description}
+                      </p>
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Select
+                        value={currentValue}
+                        onValueChange={(value) =>
+                          updateAppShortcut(
+                            definition.commandId,
+                            value === UNASSIGNED_APP_SHORTCUT_VALUE
+                              ? ""
+                              : value,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-10 w-full rounded-md border-border/80 bg-background">
+                          <SelectValue placeholder="Disabled" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>Shortcut State</SelectLabel>
+                            <SelectItem value={UNASSIGNED_APP_SHORTCUT_VALUE}>
+                              Disabled
+                            </SelectItem>
+                          </SelectGroup>
+                          <SelectSeparator />
+                          <SelectGroup>
+                            <SelectLabel>Assignable Keys</SelectLabel>
+                            {APP_SHORTCUT_KEY_OPTIONS.map((option) => (
+                              <SelectItem key={option.key} value={option.key}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Current chord: {currentShortcutLabel}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </SettingsCard>
 
