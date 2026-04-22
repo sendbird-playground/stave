@@ -56,7 +56,7 @@ import {
   sortNotificationsNewestFirst,
   workspaceHasActiveTurns,
 } from "@/lib/notifications/notification.types";
-import { buildNotificationDetail } from "@/lib/notifications/notification.utils";
+import { buildNotificationToastOptions } from "@/lib/notifications/notification.utils";
 import {
   DEFAULT_NOTIFICATION_SOUND_PRESET,
   DEFAULT_NOTIFICATION_SOUND_MODE,
@@ -1800,23 +1800,15 @@ function buildApprovalNotificationInputs(args: {
 }
 
 function showNotificationToast(notification: AppNotification) {
-  const label =
-    notification.taskTitle?.trim() ||
-    notification.workspaceName?.trim() ||
-    "Task";
-  const description = buildNotificationDetail(notification) ?? undefined;
+  const { tone, title, ...toastOptions } =
+    buildNotificationToastOptions(notification);
 
-  if (notification.kind === "task.turn_completed") {
-    toast.success(label, {
-      description,
-      duration: 5000,
-    });
-  } else if (notification.kind === "task.approval_requested") {
-    toast.warning(`Approval needed — ${label}`, {
-      description,
-      duration: 0,
-    });
+  if (tone === "success") {
+    toast.success(title, toastOptions);
+    return;
   }
+
+  toast.warning(title, toastOptions);
 }
 
 const ARCHIVED_TASK_TURN_NOTICE =
@@ -1837,7 +1829,9 @@ function normalizeReasoningExpansionMode(value: unknown): "auto" | "manual" {
   return value === "auto" ? "auto" : "manual";
 }
 
-function normalizeBorderBeamSize(value: unknown): AppSettings["borderBeamSize"] {
+function normalizeBorderBeamSize(
+  value: unknown,
+): AppSettings["borderBeamSize"] {
   return value === "sm" || value === "md" || value === "line" ? value : "md";
 }
 
