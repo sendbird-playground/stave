@@ -715,23 +715,25 @@ export function WorkspaceSkillsPanel(props: {
         </div>
 
         {/* Search */}
-        <div className="relative shrink-0 px-3 pb-1.5">
-          <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 rounded-md border-border/80 bg-background pl-7 pr-7 text-sm"
-            placeholder="Search skills..."
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setSearchQuery("")}
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
+        <div className="shrink-0 px-3 pb-1.5">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-8 rounded-md border-border/80 bg-background pl-7 pr-7 text-sm"
+              placeholder="Search skills..."
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchQuery("")}
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {/* Skill list */}
