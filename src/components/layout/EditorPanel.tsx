@@ -16,6 +16,7 @@ import { WorkspaceChangesPanel } from "./WorkspaceChangesPanel";
 import { WorkspaceExplorerPanel } from "./WorkspaceExplorerPanel";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
 import { WorkspaceLensPanel } from "./WorkspaceLensPanel";
+import { EXPLORER_SEARCH_REQUEST_EVENT } from "./explorer-search-events";
 import {
   buildSourceControlSections,
   buildSourceControlSummary,
@@ -132,6 +133,7 @@ export function EditorPanel(props: EditorPanelProps) {
   const [isCreatingExplorerEntry, setIsCreatingExplorerEntry] = useState(false);
   const [isDeletingExplorerEntry, setIsDeletingExplorerEntry] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
+  const [explorerSearchRequestNonce, setExplorerSearchRequestNonce] = useState(0);
 
   const [sourceBranch, setSourceBranch] = useState("unknown");
   const [sourceItems, setSourceItems] = useState<SourceControlStatusItem[]>([]);
@@ -294,6 +296,17 @@ export function EditorPanel(props: EditorPanelProps) {
 
     return () => window.clearTimeout(timer);
   }, [pendingExplorerCreate]);
+
+  useEffect(() => {
+    const handleExplorerSearchRequest = () => {
+      setExplorerSearchRequestNonce((current) => current + 1);
+    };
+
+    window.addEventListener(EXPLORER_SEARCH_REQUEST_EVENT, handleExplorerSearchRequest);
+    return () => {
+      window.removeEventListener(EXPLORER_SEARCH_REQUEST_EVENT, handleExplorerSearchRequest);
+    };
+  }, []);
 
   async function loadScmStatus(args?: { skipBusyState?: boolean }) {
     const getStatus = window.api?.sourceControl?.getStatus;
@@ -899,6 +912,7 @@ export function EditorPanel(props: EditorPanelProps) {
               onRefreshExplorerDirectory={handleRefreshExplorerDirectory}
               onRequestDeleteExplorerFile={handleRequestDeleteExplorerFile}
               onRequestDeleteExplorerFolder={handleRequestDeleteExplorerFolder}
+              searchRequestNonce={explorerSearchRequestNonce}
               workspaceCwd={workspaceCwd}
             />
           ) : null}

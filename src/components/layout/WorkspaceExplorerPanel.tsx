@@ -16,9 +16,24 @@ import {
   X,
 } from "lucide-react";
 import { GhosttyIcon, VSCodeIcon } from "@/components/brand-icons";
-import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Virtuoso } from "react-virtuoso";
-import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import {
+  Button,
+  Input,
+  Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
 import { ExplorerEntryIcon } from "./explorer-entry-icon";
@@ -37,6 +52,14 @@ interface PendingExplorerCreate {
 interface SearchResultFile {
   file: string;
   matches: Array<{ line: number; text: string }>;
+}
+
+function normalizeSearchQuery(rawQuery: string) {
+  const normalizedLineEndings = rawQuery.replace(/\r\n?/g, "\n");
+  if (normalizedLineEndings.includes("\n")) {
+    return normalizedLineEndings.replace(/^\n+|\n+$/g, "");
+  }
+  return normalizedLineEndings.trim();
 }
 
 function getParentDirectoryPath(args: { path: string }) {
@@ -58,7 +81,7 @@ function highlightMatch(text: string, query: string) {
 
 type FlatSearchRow =
   | { kind: "file"; file: string; fileName: string; dirPath: string; matchCount: number }
-  | { kind: "match"; file: string; line: number; text: string };
+  | { kind: "match"; file: string; line: number; lineCount: number; text: string };
 
 function buildFlatRows(results: SearchResultFile[], collapsedFiles: Set<string>): FlatSearchRow[] {
   const rows: FlatSearchRow[] = [];
@@ -73,7 +96,13 @@ function buildFlatRows(results: SearchResultFile[], collapsedFiles: Set<string>)
     });
     if (!collapsedFiles.has(result.file)) {
       for (const match of result.matches) {
-        rows.push({ kind: "match", file: result.file, line: match.line, text: match.text });
+        rows.push({
+          kind: "match",
+          file: result.file,
+          line: match.line,
+          lineCount: Math.max(1, match.text.split("\n").length),
+          text: match.text,
+        });
       }
     }
   }
@@ -81,6 +110,7 @@ function buildFlatRows(results: SearchResultFile[], collapsedFiles: Set<string>)
 }
 
 function ExplorerSearchPanel(props: {
+  focusRequestNonce: number;
   workspaceCwd: string | undefined;
   onOpenFile: (path: string, line?: number) => void;
 }) {
@@ -91,10 +121,12 @@ function ExplorerSearchPanel(props: {
   const [limitHit, setLimitHit] = useState(false);
   const [error, setError] = useState("");
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
+  const searchInputRef = useRef<HTMLTextAreaElement | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim() || !props.workspaceCwd) {
+    const normalizedQuery = normalizeSearchQuery(searchQuery);
+    if (!normalizedQuery || !props.workspaceCwd) {
       setResults([]);
       setHasSearched(false);
       setLimitHit(false);
@@ -108,7 +140,7 @@ function ExplorerSearchPanel(props: {
       if (!searchFn) return;
       const response = await searchFn({
         rootPath: props.workspaceCwd!,
-        query: searchQuery.trim(),
+        query: searchQuery,
       });
       if (response?.ok) {
         setResults(response.results);
@@ -134,7 +166,7 @@ function ExplorerSearchPanel(props: {
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current);
     }
-    if (!value.trim()) {
+    if (!normalizeSearchQuery(value)) {
       setResults([]);
       setHasSearched(false);
       setLimitHit(false);
@@ -145,6 +177,21 @@ function ExplorerSearchPanel(props: {
       void performSearch(value);
     }, 300);
   }, [performSearch]);
+
+  useEffect(() => () => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const input = searchInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.focus({ preventScroll: true });
+    input.select();
+  }, [props.focusRequestNonce]);
 
   const handleClear = useCallback(() => {
     setQuery("");
@@ -169,35 +216,52 @@ function ExplorerSearchPanel(props: {
 
   const flatRows = useMemo(() => buildFlatRows(results, collapsedFiles), [results, collapsedFiles]);
   const totalMatches = useMemo(() => results.reduce((sum, r) => sum + r.matches.length, 0), [results]);
+  const normalizedQuery = useMemo(() => normalizeSearchQuery(query), [query]);
+  const isMultilineQuery = normalizedQuery.includes("\n");
+  const queryLineCount = Math.max(1, query.split(/\r\n?|\n/).length);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-2 pb-1">
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <Search className="pointer-events-none absolute left-3 top-3 size-3.5 text-muted-foreground" />
+          <Textarea
+            ref={searchInputRef}
+            data-explorer-search-input
             value={query}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                 if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
                 void performSearch(query);
               }
+              if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.key === "Escape") {
+                e.preventDefault();
+                handleClear();
+              }
             }}
-            className="h-8 rounded-sm border-border/80 bg-background pl-7 pr-7 text-sm"
-            placeholder="Search in files..."
+            rows={Math.min(6, Math.max(1, isMultilineQuery ? queryLineCount : 1))}
+            className="min-h-0 resize-none rounded-sm border-border/80 bg-background pl-8 pr-9 py-2 text-sm leading-5"
+            placeholder="Search in files or paste a code block..."
             autoFocus
           />
           {query ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={handleClear}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-1.5 top-1.5 h-6 w-6 rounded-sm p-0 text-muted-foreground hover:text-foreground"
             >
               <X className="size-3.5" />
-            </button>
+            </Button>
           ) : null}
         </div>
+        <p className="px-0.5 pt-1 text-[11px] leading-4 text-muted-foreground">
+          {isMultilineQuery
+            ? "Exact multiline search enabled. Press Cmd/Ctrl+Enter to run immediately."
+            : "Type to search. Paste multiple lines to search an exact code block."}
+        </p>
       </div>
 
       {isSearching ? (
@@ -224,7 +288,6 @@ function ExplorerSearchPanel(props: {
           <div className="min-h-0 flex-1 bg-sidebar">
             <Virtuoso
               totalCount={flatRows.length}
-              fixedItemHeight={28}
               increaseViewportBy={1200}
               className="[&>div]:bg-sidebar"
               itemContent={(index) => {
@@ -256,11 +319,16 @@ function ExplorerSearchPanel(props: {
                   <button
                     type="button"
                     onClick={() => props.onOpenFile(row.file, row.line)}
-                    className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-left text-xs hover:bg-secondary/60"
+                    className="flex w-full min-w-0 items-start gap-2 rounded-sm px-1.5 py-1.5 text-left hover:bg-secondary/60"
                     style={{ paddingLeft: "24px" }}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
-                      {highlightMatch(row.text, query)}
+                    <span className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      {row.lineCount > 1 ? `${row.line}-${row.line + row.lineCount - 1}` : row.line}
+                    </span>
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-muted-foreground">
+                      {row.lineCount > 1 || isMultilineQuery
+                        ? row.text
+                        : highlightMatch(row.text, normalizedQuery)}
                     </span>
                   </button>
                 );
@@ -462,9 +530,19 @@ export function WorkspaceExplorerPanel(props: {
   onRefreshExplorerDirectory: (path: string) => void;
   onRequestDeleteExplorerFile: (path: string, name: string) => void;
   onRequestDeleteExplorerFolder: (path: string, name: string) => void;
+  searchRequestNonce: number;
   workspaceCwd?: string;
 }) {
   const [showSearch, setShowSearch] = useState(false);
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0);
+
+  useEffect(() => {
+    if (props.searchRequestNonce <= 0) {
+      return;
+    }
+    setShowSearch(true);
+    setSearchFocusNonce(props.searchRequestNonce);
+  }, [props.searchRequestNonce]);
 
   return (
     <div className="flex min-h-0 h-full flex-col px-3 py-2">
@@ -479,7 +557,14 @@ export function WorkspaceExplorerPanel(props: {
                   variant="ghost"
                   size="sm"
                   className={`h-7 w-7 rounded-sm p-0 ${showSearch ? "bg-secondary text-foreground" : "text-muted-foreground"}`}
-                  onClick={() => setShowSearch(!showSearch)}
+                  onClick={() => {
+                    if (showSearch) {
+                      setShowSearch(false);
+                      return;
+                    }
+                    setShowSearch(true);
+                    setSearchFocusNonce((nonce) => nonce + 1);
+                  }}
                 >
                   <Search className="size-4" />
                 </Button>
@@ -549,6 +634,7 @@ export function WorkspaceExplorerPanel(props: {
       {showSearch ? (
         <div className="mb-2 min-h-0 flex-1">
           <ExplorerSearchPanel
+            focusRequestNonce={searchFocusNonce}
             workspaceCwd={props.workspaceCwd}
             onOpenFile={props.onOpenExplorerFile}
           />

@@ -95,6 +95,7 @@ export interface CommandPaletteCommandHandlers {
   createTask: () => void;
   continueWorkspace: () => Promise<void> | void;
   focusFileSearch: () => void;
+  openExplorerSearch: () => void;
   openStaveMuse: () => void;
   openLatestCompletedTurnTask: () => Promise<void> | void;
   openInTerminal: (path: string) => Promise<void> | void;
@@ -431,6 +432,26 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       keywords: ["explorer", "files", "right rail"],
       shortcut: `${args.modifierLabel}+E`,
       run: () => args.commands.showOverlayTab("explorer"),
+      source: "core",
+    }),
+  },
+  {
+    id: "view.search-in-files",
+    title: "Search in Files",
+    description: "Open the explorer search panel for exact content search.",
+    group: "view",
+    icon: Search,
+    keywords: ["search", "files", "content", "ripgrep", "explorer"],
+    shortcut: (modifierLabel) => `${modifierLabel}+Shift+F`,
+    build: (args) => ({
+      id: "view.search-in-files",
+      title: "Search in Files",
+      subtitle: "Search the active workspace contents from the explorer.",
+      group: "view",
+      icon: Search,
+      keywords: ["search", "files", "content", "ripgrep", "explorer"],
+      shortcut: `${args.modifierLabel}+Shift+F`,
+      run: args.commands.openExplorerSearch,
       source: "core",
     }),
   },
