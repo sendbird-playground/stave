@@ -351,6 +351,7 @@ import {
   upsertRecentProjectState,
   captureCurrentProjectState,
   resolveProjectForWorkspaceId,
+  resolveWorkspaceRemoteBaseBranchTarget,
   resolveTaskWorkspaceContext,
 } from "@/store/project.utils";
 import {
@@ -1142,6 +1143,7 @@ interface AppState {
     name: string;
     mode: "branch" | "clean";
     fromBranch?: string;
+    fromBranchKind?: "local" | "remote";
     initCommand?: string;
     useRootNodeModulesSymlink?: boolean;
     initialTaskTitle?: string;
@@ -5585,6 +5587,7 @@ export const useAppStore = create<AppState>()(
           name,
           mode,
           fromBranch,
+          fromBranchKind,
           initCommand,
           useRootNodeModulesSymlink: requestedRootNodeModulesSymlink,
           initialTaskTitle,
@@ -5628,15 +5631,67 @@ export const useAppStore = create<AppState>()(
               : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
                   value: requestedRootNodeModulesSymlink,
                 });
-          const baseBranch =
-            fromBranch?.trim() || current.defaultBranch || "main";
           const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName, unique: true })}`;
           const workspaceId = buildImportedWorktreeWorkspaceId({
             projectPath: current.projectPath,
             worktreePath: workspacePath,
           });
+          let baseBranch =
+            fromBranch?.trim() || current.defaultBranch || "main";
+          const creationNotices: Array<{
+            level: "success" | "warning";
+            message: string;
+          }> = [];
           const runner = window.api?.terminal?.runCommand;
           if (runner) {
+            const remoteTarget =
+              mode === "branch"
+                ? await resolveWorkspaceRemoteBaseBranchTarget({
+                    baseBranch,
+                    fromBranchKind,
+                    verifyRef: async (ref) =>
+                      (
+                        await runner({
+                          cwd: current.projectPath ?? undefined,
+                          command: `git show-ref --verify --quiet ${JSON.stringify(ref)}`,
+                        })
+                      ).ok,
+                  })
+                : null;
+            if (remoteTarget) {
+              const fetchResult = await runner({
+                cwd: current.projectPath,
+                command: `git fetch ${remoteTarget.remoteName} --prune`,
+              });
+              if (!fetchResult.ok) {
+                const localBranchProbe = await runner({
+                  cwd: current.projectPath,
+                  command: `git show-ref --verify --quiet ${JSON.stringify(`refs/heads/${remoteTarget.localBranch}`)}`,
+                });
+                const fallbackBranch = localBranchProbe.ok
+                  ? remoteTarget.localBranch
+                  : baseBranch;
+                baseBranch = fallbackBranch;
+                creationNotices.push({
+                  level: "warning",
+                  message: localBranchProbe.ok
+                    ? `Could not refresh \`${fromBranch}\`; created the workspace from local \`${remoteTarget.localBranch}\` instead. ${summarizeTerminalCommandDetail(
+                        {
+                          stderr: fetchResult.stderr,
+                          stdout: fetchResult.stdout,
+                          fallback: "git fetch failed.",
+                        },
+                      )}`
+                    : `Could not refresh \`${fromBranch}\`; created the workspace from the cached remote-tracking ref instead. ${summarizeTerminalCommandDetail(
+                        {
+                          stderr: fetchResult.stderr,
+                          stdout: fetchResult.stdout,
+                          fallback: "git fetch failed.",
+                        },
+                      )}`,
+                });
+              }
+            }
             await runner({
               cwd: current.projectPath,
               command: "mkdir -p .stave/workspaces",
@@ -5719,10 +5774,6 @@ export const useAppStore = create<AppState>()(
           const workspaceState = buildWorkspaceSessionState({ snapshot });
 
           let files = current.projectFiles;
-          const creationNotices: Array<{
-            level: "success" | "warning";
-            message: string;
-          }> = [];
           try {
             await workspaceFsAdapter.setRoot?.({
               rootPath: workspacePath,

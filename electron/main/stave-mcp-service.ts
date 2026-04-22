@@ -41,9 +41,7 @@ async function invokeLocalMcp<TResult>(
 
 ensureLocalMcpEventBridge();
 
-export async function getWorkspaceInformation(args: {
-  workspaceId: string;
-}) {
+export async function getWorkspaceInformation(args: { workspaceId: string }) {
   return invokeLocalMcp<{
     workspaceId: string;
     workspaceInformation: import("../../src/lib/workspace-information").WorkspaceInformationState;
@@ -70,9 +68,7 @@ export async function appendWorkspaceNotes(args: {
   }>("append-workspace-notes", args);
 }
 
-export async function clearWorkspaceNotes(args: {
-  workspaceId: string;
-}) {
+export async function clearWorkspaceNotes(args: { workspaceId: string }) {
   return invokeLocalMcp<{
     workspaceId: string;
     workspaceInformation: import("../../src/lib/workspace-information").WorkspaceInformationState;
@@ -233,10 +229,9 @@ export async function registerProject(args: {
   projectName?: string;
   defaultBranch?: string;
 }) {
-  return invokeLocalMcp<import("../host-service/local-mcp-runtime").RegisteredProjectInfo>(
-    "register-project",
-    args,
-  );
+  return invokeLocalMcp<
+    import("../host-service/local-mcp-runtime").RegisteredProjectInfo
+  >("register-project", args);
 }
 
 export async function createWorkspace(args: {
@@ -244,13 +239,13 @@ export async function createWorkspace(args: {
   name: string;
   mode: "branch" | "clean";
   fromBranch?: string;
+  fromBranchKind?: "local" | "remote";
   initCommand?: string;
   useRootNodeModulesSymlink?: boolean;
 }) {
-  return invokeLocalMcp<import("../host-service/local-mcp-runtime").CreatedWorkspaceInfo>(
-    "create-workspace",
-    args,
-  );
+  return invokeLocalMcp<
+    import("../host-service/local-mcp-runtime").CreatedWorkspaceInfo
+  >("create-workspace", args);
 }
 
 export async function runTask(args: {
@@ -261,20 +256,18 @@ export async function runTask(args: {
   provider?: import("../../src/lib/providers/provider.types").ProviderId;
   runtimeOptions?: import("../../src/lib/providers/provider.types").ProviderRuntimeOptions;
 }) {
-  return invokeLocalMcp<import("../host-service/local-mcp-runtime").TaskRunResult>(
-    "run-task",
-    args,
-  );
+  return invokeLocalMcp<
+    import("../host-service/local-mcp-runtime").TaskRunResult
+  >("run-task", args);
 }
 
 export async function getTaskStatus(args: {
   workspaceId: string;
   taskId: string;
 }) {
-  return invokeLocalMcp<import("../host-service/local-mcp-runtime").TaskStatusResult>(
-    "get-task-status",
-    args,
-  );
+  return invokeLocalMcp<
+    import("../host-service/local-mcp-runtime").TaskStatusResult
+  >("get-task-status", args);
 }
 
 export async function respondApproval(args: {
@@ -309,8 +302,7 @@ export async function respondUserInput(args: {
 }
 
 export async function listKnownProjects() {
-  return invokeLocalMcp<import("../host-service/local-mcp-runtime").RegisteredProjectInfo[]>(
-    "list-known-projects",
-    undefined,
-  );
+  return invokeLocalMcp<
+    import("../host-service/local-mcp-runtime").RegisteredProjectInfo[]
+  >("list-known-projects", undefined);
 }

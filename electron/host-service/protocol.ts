@@ -532,6 +532,7 @@ export interface HostServiceRequestMap {
   };
   "scm.list-branches": {
     cwd?: string;
+    refreshRemote?: boolean;
   };
   "scm.create-branch": {
     name: string;

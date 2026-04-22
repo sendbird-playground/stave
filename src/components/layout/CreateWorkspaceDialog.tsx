@@ -18,9 +18,22 @@ interface CreateWorkspaceDialogProps {
     name: string;
     mode: "branch" | "clean";
     fromBranch?: string;
+    fromBranchKind?: "local" | "remote";
     initCommand?: string;
     useRootNodeModulesSymlink?: boolean;
-  }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
+  }) => Promise<{
+    ok: boolean;
+    message?: string;
+    noticeLevel?: "success" | "warning";
+  }>;
+}
+
+function resolveSelectedBranchKind(args: {
+  branch: string;
+  localBranches: string[];
+  remoteBranches: string[];
+}): "local" | "remote" {
+  return args.remoteBranches.includes(args.branch) ? "remote" : "local";
 }
 
 export function CreateWorkspaceDialog({
@@ -34,14 +47,25 @@ export function CreateWorkspaceDialog({
   onCreateWorkspace,
 }: CreateWorkspaceDialogProps) {
   const [workspaceName, setWorkspaceName] = useState("");
-  const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
+  const [createWorkspaceError, setCreateWorkspaceError] = useState<
+    string | null
+  >(null);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
-  const [creationMode, setCreationMode] = useState<"branch" | "clean">("branch");
+  const [creationMode, setCreationMode] = useState<"branch" | "clean">(
+    "branch",
+  );
   const [fromBranch, setFromBranch] = useState("main");
+  const [fromBranchKind, setFromBranchKind] = useState<"local" | "remote">(
+    "local",
+  );
   const [initCommand, setInitCommand] = useState(defaultInitCommand);
-  const [useRootNodeModulesSymlink, setUseRootNodeModulesSymlink] = useState(defaultUseRootNodeModulesSymlink);
+  const [useRootNodeModulesSymlink, setUseRootNodeModulesSymlink] = useState(
+    defaultUseRootNodeModulesSymlink,
+  );
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
-  const [availableRemoteBranches, setAvailableRemoteBranches] = useState<string[]>([]);
+  const [availableRemoteBranches, setAvailableRemoteBranches] = useState<
+    string[]
+  >([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
 
   useEffect(() => {
@@ -57,6 +81,13 @@ export function CreateWorkspaceDialog({
     });
 
     setFromBranch(fallbackBaseBranch);
+    setFromBranchKind(
+      resolveSelectedBranchKind({
+        branch: fallbackBaseBranch,
+        localBranches: [],
+        remoteBranches: [],
+      }),
+    );
     setInitCommand(defaultInitCommand);
     setUseRootNodeModulesSymlink(defaultUseRootNodeModulesSymlink);
     setAvailableBranches([]);
@@ -69,31 +100,49 @@ export function CreateWorkspaceDialog({
 
     let cancelled = false;
     setLoadingBranches(true);
-    void listBranches({ cwd }).then((result) => {
-      if (!result?.ok || cancelled) {
-        return;
-      }
+    void listBranches({ cwd, refreshRemote: true })
+      .then((result) => {
+        if (!result?.ok || cancelled) {
+          return;
+        }
 
-      setAvailableBranches(result.branches);
-      setAvailableRemoteBranches(result.remoteBranches ?? []);
-      setFromBranch(resolveDefaultCreateWorkspaceBaseBranch({
-        activeBranch,
-        defaultBranch,
-        localBranches: result.branches,
-        remoteBranches: result.remoteBranches ?? [],
-      }));
-    }).catch(() => {
-      // IPC failure — swallow; branch lists stay empty.
-    }).finally(() => {
-      if (!cancelled) {
-        setLoadingBranches(false);
-      }
-    });
+        setAvailableBranches(result.branches);
+        setAvailableRemoteBranches(result.remoteBranches ?? []);
+        const nextFromBranch = resolveDefaultCreateWorkspaceBaseBranch({
+          activeBranch,
+          defaultBranch,
+          localBranches: result.branches,
+          remoteBranches: result.remoteBranches ?? [],
+        });
+        setFromBranch(nextFromBranch);
+        setFromBranchKind(
+          resolveSelectedBranchKind({
+            branch: nextFromBranch,
+            localBranches: result.branches,
+            remoteBranches: result.remoteBranches ?? [],
+          }),
+        );
+      })
+      .catch(() => {
+        // IPC failure — swallow; branch lists stay empty.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingBranches(false);
+        }
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [activeBranch, cwd, defaultBranch, defaultInitCommand, defaultUseRootNodeModulesSymlink, open]);
+  }, [
+    activeBranch,
+    cwd,
+    defaultBranch,
+    defaultInitCommand,
+    defaultUseRootNodeModulesSymlink,
+    open,
+  ]);
 
   useEffect(() => {
     if (open) {
@@ -108,20 +157,35 @@ export function CreateWorkspaceDialog({
     setAvailableBranches([]);
     setAvailableRemoteBranches([]);
     setLoadingBranches(false);
-    setFromBranch(resolveDefaultCreateWorkspaceBaseBranch({
+    const fallbackBaseBranch = resolveDefaultCreateWorkspaceBaseBranch({
       activeBranch,
       defaultBranch,
       localBranches: [],
       remoteBranches: [],
-    }));
-  }, [activeBranch, defaultBranch, defaultInitCommand, defaultUseRootNodeModulesSymlink, open]);
+    });
+    setFromBranch(fallbackBaseBranch);
+    setFromBranchKind(
+      resolveSelectedBranchKind({
+        branch: fallbackBaseBranch,
+        localBranches: [],
+        remoteBranches: [],
+      }),
+    );
+  }, [
+    activeBranch,
+    defaultBranch,
+    defaultInitCommand,
+    defaultUseRootNodeModulesSymlink,
+    open,
+  ]);
 
   if (!open) {
     return null;
   }
 
   const submitModifierLabel =
-    typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+    typeof navigator !== "undefined" &&
+    /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
       ? "Cmd+Enter"
       : "Ctrl+Enter";
 
@@ -138,23 +202,30 @@ export function CreateWorkspaceDialog({
         name: workspaceName,
         mode: creationMode,
         fromBranch,
+        fromBranchKind,
         initCommand,
         useRootNodeModulesSymlink,
       });
       if (!result.ok) {
-        setCreateWorkspaceError(result.message ?? "Failed to create workspace.");
+        setCreateWorkspaceError(
+          result.message ?? "Failed to create workspace.",
+        );
         return;
       }
       if (result.message) {
         if (result.noticeLevel === "warning") {
-          toast.warning("Workspace created with warning", { description: result.message });
+          toast.warning("Workspace created with warning", {
+            description: result.message,
+          });
         } else {
           toast.success("Workspace created", { description: result.message });
         }
       }
       onOpenChange(false);
     } catch (error) {
-      setCreateWorkspaceError(error instanceof Error ? error.message : "Failed to create workspace.");
+      setCreateWorkspaceError(
+        error instanceof Error ? error.message : "Failed to create workspace.",
+      );
     } finally {
       setCreatingWorkspace(false);
     }
@@ -176,10 +247,10 @@ export function CreateWorkspaceDialog({
     }
 
     if (
-      event.key === "Enter"
-      && (event.metaKey || event.ctrlKey)
-      && (event.target as HTMLElement | null)?.closest("textarea")
-      && !creatingWorkspace
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      (event.target as HTMLElement | null)?.closest("textarea") &&
+      !creatingWorkspace
     ) {
       event.preventDefault();
       void handleCreateWorkspace();
@@ -188,7 +259,10 @@ export function CreateWorkspaceDialog({
 
   return (
     <div
-      className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")}
+      className={cn(
+        UI_LAYER_CLASS.dialog,
+        "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]",
+      )}
       onMouseDown={() => {
         if (creatingWorkspace) {
           return;
@@ -196,7 +270,10 @@ export function CreateWorkspaceDialog({
         closeDialog();
       }}
     >
-      <Card className="animate-dropdown-in w-full max-w-3xl rounded-lg border-border/80 bg-card p-6" onMouseDown={(event) => event.stopPropagation()}>
+      <Card
+        className="animate-dropdown-in w-full max-w-3xl rounded-lg border-border/80 bg-card p-6"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-3xl font-semibold">New workspace</h3>
@@ -224,13 +301,19 @@ export function CreateWorkspaceDialog({
             />
           </div>
           <p className="mb-2 text-sm font-medium">Creation Methods</p>
-          <div className="space-y-2" role="radiogroup" aria-label="Creation methods">
+          <div
+            className="space-y-2"
+            role="radiogroup"
+            aria-label="Creation methods"
+          >
             <div
               role="radio"
               aria-checked={creationMode === "branch"}
               className={cn(
                 "w-full rounded-sm border p-3",
-                creationMode === "branch" ? "border-primary bg-secondary/50" : "border-border/80 bg-card",
+                creationMode === "branch"
+                  ? "border-primary bg-secondary/50"
+                  : "border-border/80 bg-card",
               )}
             >
               <button
@@ -242,12 +325,18 @@ export function CreateWorkspaceDialog({
                   <GitBranch className="size-4" />
                   Create From Branch
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">Create worktree from a searchable base branch list with remote bases prioritized.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create worktree from a searchable base branch list with remote
+                  bases prioritized.
+                </p>
               </button>
               <div className="mt-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Base Branch</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Base Branch
+                </p>
                 <CreateWorkspaceBranchPicker
                   value={fromBranch}
+                  valueScope={fromBranchKind}
                   defaultBranch={defaultBranch}
                   localBranches={availableBranches}
                   loading={loadingBranches}
@@ -255,6 +344,10 @@ export function CreateWorkspaceDialog({
                   onChange={(nextBranch) => {
                     setCreationMode("branch");
                     setFromBranch(nextBranch);
+                  }}
+                  onChangeOption={(option) => {
+                    setCreationMode("branch");
+                    setFromBranchKind(option.scope);
                   }}
                 />
               </div>
@@ -264,7 +357,9 @@ export function CreateWorkspaceDialog({
               aria-checked={creationMode === "clean"}
               className={cn(
                 "w-full rounded-sm border p-3",
-                creationMode === "clean" ? "border-primary bg-secondary/50" : "border-border/80 bg-card",
+                creationMode === "clean"
+                  ? "border-primary bg-secondary/50"
+                  : "border-border/80 bg-card",
               )}
             >
               <button
@@ -272,15 +367,20 @@ export function CreateWorkspaceDialog({
                 className="w-full text-left"
                 onClick={() => setCreationMode("clean")}
               >
-                <p className="text-base font-semibold">Create Clean Workspace</p>
-                <p className="mt-1 text-sm text-muted-foreground">Create a new isolated worktree with a fresh branch.</p>
+                <p className="text-base font-semibold">
+                  Create Clean Workspace
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create a new isolated worktree with a fresh branch.
+                </p>
               </button>
             </div>
           </div>
           <div className="mt-4">
             <p className="mb-2 text-sm font-medium">Post-Create Command</p>
             <p className="mb-2 text-sm text-muted-foreground">
-              Optional shell command to run once inside the new workspace root after creation. Useful for `bun install` or `npm install`.
+              Optional shell command to run once inside the new workspace root
+              after creation. Useful for `bun install` or `npm install`.
             </p>
             <Textarea
               value={initCommand}
@@ -288,45 +388,59 @@ export function CreateWorkspaceDialog({
               onChange={(event) => setInitCommand(event.target.value)}
               className="min-h-[110px] rounded-sm border-border/80 bg-background font-mono text-sm"
             />
-            <p className="mt-2 text-xs text-muted-foreground">Shortcut: use {submitModifierLabel} to create while editing this field.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Shortcut: use {submitModifierLabel} to create while editing this
+              field.
+            </p>
           </div>
           <div className="mt-4">
             <p className="mb-2 text-sm font-medium">Dependency Reuse</p>
             <button
               type="button"
               aria-pressed={useRootNodeModulesSymlink}
-              onClick={() => setUseRootNodeModulesSymlink((current) => !current)}
+              onClick={() =>
+                setUseRootNodeModulesSymlink((current) => !current)
+              }
               className={cn(
                 "w-full rounded-sm border px-4 py-3 text-left transition-colors",
                 useRootNodeModulesSymlink
                   ? "border-primary bg-secondary/50"
-                  : "border-border/80 bg-background hover:border-border"
+                  : "border-border/80 bg-background hover:border-border",
               )}
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                   <span>Reuse root</span>
-                  <Badge variant="outline" className="h-5 rounded-md px-1.5 font-mono text-[11px] font-medium">
+                  <Badge
+                    variant="outline"
+                    className="h-5 rounded-md px-1.5 font-mono text-[11px] font-medium"
+                  >
                     node_modules
                   </Badge>
                   <span>via symlink</span>
                 </p>
-                <span className={cn(
-                  "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                  useRootNodeModulesSymlink
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border/80 text-muted-foreground"
-                )}
+                <span
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                    useRootNodeModulesSymlink
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border/80 text-muted-foreground",
+                  )}
                 >
                   {useRootNodeModulesSymlink ? "On" : "Off"}
                 </span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
                 Creates{" "}
-                <Badge variant="outline" className="h-5 rounded-md px-1.5 align-middle font-mono text-[11px] font-medium">
+                <Badge
+                  variant="outline"
+                  className="h-5 rounded-md px-1.5 align-middle font-mono text-[11px] font-medium"
+                >
                   node_modules
-                </Badge>
-                {" "}in the new workspace as a symlink to the repository root install. This is fast, but later installs in that workspace will affect the shared dependency tree.
+                </Badge>{" "}
+                in the new workspace as a symlink to the repository root
+                install. This is fast, but later installs in that workspace will
+                affect the shared dependency tree.
               </p>
             </button>
           </div>
@@ -344,7 +458,9 @@ export function CreateWorkspaceDialog({
             </Button>
           </div>
           {createWorkspaceError ? (
-            <p className="mt-3 text-sm text-destructive">{createWorkspaceError}</p>
+            <p className="mt-3 text-sm text-destructive">
+              {createWorkspaceError}
+            </p>
           ) : null}
         </form>
       </Card>
