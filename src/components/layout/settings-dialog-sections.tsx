@@ -966,6 +966,12 @@ function ThemeSection() {
   const borderBeamEnabled = useAppStore(
     (state) => state.settings.borderBeamEnabled,
   );
+  const borderBeamSize = useAppStore(
+    (state) => state.settings.borderBeamSize,
+  );
+  const borderBeamVariant = useAppStore(
+    (state) => state.settings.borderBeamVariant,
+  );
   const userCustomThemes = useAppStore(
     (state) => state.settings.userCustomThemes,
   );
@@ -1093,12 +1099,51 @@ function ThemeSection() {
         >
           <SwitchField
             title="Border Beam"
-            description="Animate a soft highlight around the prompt input and the active workspace row while a task is streaming."
+            description="Animate a soft highlight around the prompt input and the active workspace row while a task is streaming. Style presets come from the border-beam library."
             checked={borderBeamEnabled}
             onCheckedChange={(checked) =>
               updateSettings({ patch: { borderBeamEnabled: checked } })
             }
           />
+          {borderBeamEnabled ? (
+            <div className="mt-3 grid gap-3 border-t border-border/50 pt-3">
+              <LabeledField
+                title="Beam Size"
+                description="Library size preset. `md` is the full border glow; `sm` is compact for small inputs; `line` sweeps a lit stripe along the bottom edge."
+              >
+                <ChoiceButtons
+                  value={borderBeamSize}
+                  columns={3}
+                  onChange={(value) =>
+                    updateSettings({ patch: { borderBeamSize: value } })
+                  }
+                  options={[
+                    { value: "sm", label: "Small" },
+                    { value: "md", label: "Medium" },
+                    { value: "line", label: "Line" },
+                  ]}
+                />
+              </LabeledField>
+              <LabeledField
+                title="Beam Colors"
+                description="Library color palette. `Colorful` is a full rainbow sweep; `Ocean` and `Sunset` are cool and warm variants; `Mono` is grayscale."
+              >
+                <ChoiceButtons
+                  value={borderBeamVariant}
+                  columns={2}
+                  onChange={(value) =>
+                    updateSettings({ patch: { borderBeamVariant: value } })
+                  }
+                  options={[
+                    { value: "colorful", label: "Colorful" },
+                    { value: "mono", label: "Mono" },
+                    { value: "ocean", label: "Ocean" },
+                    { value: "sunset", label: "Sunset" },
+                  ]}
+                />
+              </LabeledField>
+            </div>
+          ) : null}
         </SettingsCard>
 
         <SettingsCard

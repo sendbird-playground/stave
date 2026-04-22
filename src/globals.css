@@ -982,45 +982,10 @@
 }
 
 /*
- * Border Beam
- *
- * A masked conic-gradient that rotates around the parent's border. The parent
- * must be `position: relative` and carry a `border-radius`; the beam wrapper
- * uses `absolute inset-0 rounded-[inherit]` so the traced edge always matches
- * the parent's rounded corners exactly.
- *
- * We animate a registered custom property (`--beam-angle`) so the conic-
- * gradient re-paints smoothly each frame — this is the shadcn/magicui trick
- * and works in every Chromium-based renderer (Electron here is Chromium).
+ * Border Beam styling is owned by the `border-beam` npm library — it ships
+ * its own `<style>` block per-instance (see src/components/ui/border-beam.tsx).
+ * Do not reintroduce local `.border-beam` overrides here; they flatten the
+ * library's palette back onto our theme tokens. Variant / size / theme are
+ * wired through `AppSettings.borderBeam*` and the Motion card of the
+ * settings dialog instead.
  */
-@property --beam-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@layer utilities {
-  .border-beam {
-    padding: var(--beam-border-width, 1px);
-    background: conic-gradient(
-      from var(--beam-angle, 0deg),
-      transparent 0deg,
-      transparent 280deg,
-      var(--beam-color-from, var(--color-primary)) 325deg,
-      var(--beam-color-to, var(--color-ring)) 360deg
-    );
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: border-beam var(--beam-duration, 6s) linear infinite;
-    animation-delay: var(--beam-delay, 0s);
-  }
-}
-
-@keyframes border-beam {
-  to {
-    --beam-angle: 360deg;
-  }
-}
