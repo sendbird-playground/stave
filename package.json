@@ -7,6 +7,23 @@
     "name": "astyfx",
     "email": "astyfx@gmail.com"
   },
+  "license": "MIT",
+  "homepage": "https://github.com/OWNER/stave#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OWNER/stave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OWNER/stave/issues"
+  },
+  "keywords": [
+    "ai",
+    "agentic-coding",
+    "claude",
+    "codex",
+    "electron",
+    "ide"
+  ],
   "type": "module",
   "main": "out/main/index.js",
   "engines": {

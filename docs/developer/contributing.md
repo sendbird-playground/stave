@@ -1,6 +1,6 @@
 # Developer and Contributing Guide
 
-This guide is for building Stave locally or contributing changes. If you want to install and use the app, start with the public docs site at <https://shiny-barnacle-5vmm96j.pages.github.io/docs/>, the root [README](../../README.md), and the [Install Guide](../install-guide.md).
+This guide is for building Stave locally or contributing changes. If you want to install and use the app, start with the root [README](../../README.md) and the [Install Guide](../install-guide.md).
 
 ## Before You Start
 

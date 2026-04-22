@@ -16,7 +16,7 @@ import { resolveExecutableLookupPath } from "../../providers/executable-path";
 import { bypassQuitConfirmation } from "../quit-state";
 import { runCommandArgs } from "./command";
 
-const DEFAULT_REPO = "sendbird-playground/stave";
+const DEFAULT_REPO = "OWNER/stave";
 const FALLBACK_LOOKUP_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 function resolveReleaseRepo() {

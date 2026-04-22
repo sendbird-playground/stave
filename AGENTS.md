@@ -113,7 +113,7 @@ Both Codex and Claude should treat the literal tokens below as explicit triggers
 - `the-react-effect-guardrail`
   Use for `useEffect`, `useMemo`, `useCallback`, `useRef`, long-lived observers, timers, IPC listeners, focus restore, resize logic, and stale-closure-prone hooks.
 
-These guardrail skills are global because the patterns apply to Stave and to similar Electron desktop apps such as Superset, mux, cmux, and t3code-style products.
+These guardrail skills are global because the patterns apply to Stave and to similar Electron desktop AI coding apps.
 
 ## Theme System (mandatory for ALL UI work)
 

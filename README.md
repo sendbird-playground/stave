@@ -6,19 +6,14 @@
 
 Stave is a desktop AI coding workspace for Claude and Codex. It combines task-oriented chat, repo-aware context, an editor and terminal, workspace memory, and local automation in one app.
 
-**Website ->** https://shiny-barnacle-5vmm96j.pages.github.io/
-**Docs ->** https://shiny-barnacle-5vmm96j.pages.github.io/docs/
-
 ![Stave](docs/screenshots/stave-app.png)
 
 ## Install the App on macOS
 
-The current packaged macOS install flow uses GitHub CLI authentication.
-
-If you are already authenticated for `sendbird-playground`, install the latest build with:
+The packaged macOS install flow uses GitHub CLI authentication. Replace `OWNER` below with the GitHub repository owner you are installing from:
 
 ```bash
-gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash
+gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/OWNER/stave/contents/scripts/install-latest-release.sh | bash
 ```
 
 If this is your first time using `gh`, or you need SSO or scope help, see the full [Install Guide](docs/install-guide.md).
@@ -81,7 +76,6 @@ Recommended next steps:
 
 ## Documentation
 
-- [Docs site](https://shiny-barnacle-5vmm96j.pages.github.io/docs/) for end-user install, workflow, and feature reference
 - [Install Guide](docs/install-guide.md) for the full macOS install and update flow
 - [Coliseum Guide](docs/features/coliseum.md) for side-by-side multi-model comparisons and winner promotion
 - [Provider Sandbox and Approval Guide](docs/features/provider-sandbox-and-approval.md) for runtime safety and plan settings

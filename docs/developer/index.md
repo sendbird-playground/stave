@@ -4,7 +4,6 @@ This section is for building, debugging, and contributing to Stave.
 
 If you want to install and use the product, start with:
 
-- the public docs site: <https://shiny-barnacle-5vmm96j.pages.github.io/docs/>
 - the root [README](../../README.md)
 - the user-facing [Install Guide](../install-guide.md)
 

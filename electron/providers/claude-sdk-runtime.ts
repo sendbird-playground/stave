@@ -2494,7 +2494,7 @@ export async function streamClaudeWithSdk(
     failureEvents.forEach((event) => args.onEvent?.(event));
     return failureEvents;
   } finally {
-    // ── Cleanup pending resolvers (T3Code pattern) ──────────────────────
+    // ── Cleanup pending resolvers ───────────────────────────────────────
     // If the turn was aborted while waiting for user approval/input, the
     // SDK's options.signal SHOULD abort the pending waitForClaudeToolDecision
     // promise.  However, as a safety net (in case the SDK doesn't propagate

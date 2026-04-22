@@ -11,7 +11,7 @@ done
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 
 APP_NAME="${STAVE_APP_NAME:-Stave}"
-REPO="${STAVE_REPO:-sendbird-playground/stave}"
+REPO="${STAVE_REPO:-OWNER/stave}"
 ASSET_NAME="${STAVE_RELEASE_ASSET:-Stave-macOS.zip}"
 DEFAULT_INSTALL_DIR="$HOME/Applications"
 CURRENT_APP_PATH="${STAVE_CURRENT_APP_PATH:-}"

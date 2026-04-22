@@ -135,7 +135,7 @@ describe("project name normalization", () => {
     const projects = normalizeRecentProjectStates({
       projects: [
         {
-          projectPath: "/Users/jacob.kim/workspace/stave",
+          projectPath: "/tmp/workspace/stave",
           projectName: "stave",
           lastOpenedAt: "2026-03-30T13:35:33.466Z",
           defaultBranch: "main",
