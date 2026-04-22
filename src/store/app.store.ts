@@ -894,6 +894,12 @@ export interface AppSettings {
   customThemeId: string | null;
   /** Ambient artwork rendered behind the left project sidebar glass. */
   sidebarArtworkMode: SidebarArtworkMode;
+  /**
+   * When `true`, an animated "border beam" highlight travels around the
+   * prompt input and active-workspace rows while a task is streaming. Purely
+   * decorative — honors `prefers-reduced-motion`.
+   */
+  borderBeamEnabled: boolean;
   /** User-installed custom theme definitions (persisted in localStorage). */
   userCustomThemes: CustomThemeDefinition[];
   themeOverrides: Record<ThemeModeName, ThemeOverrideValues>;
@@ -1824,6 +1830,7 @@ const defaultSettings: AppSettings = {
   themeMode: "dark",
   customThemeId: null,
   sidebarArtworkMode: DEFAULT_SIDEBAR_ARTWORK_MODE,
+  borderBeamEnabled: false,
   userCustomThemes: [],
   themeOverrides: {
     light: {},
