@@ -864,30 +864,6 @@ export function WorkspaceTaskTabs() {
           </div>
           <div className="flex shrink-0 items-center gap-1 px-2">
             <DropdownMenu>
-              <DropdownMenuTrigger
-                className={triggerButtonClassName({
-                  className:
-                    "h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground",
-                })}
-              >
-                <Ellipsis className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onSelect={() => setTaskHistoryOpen(true)}>
-                  Task History
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={showPresetBar}
-                  onCheckedChange={(checked) =>
-                    updateSettings({ patch: { showPresetBar: checked } })
-                  }
-                >
-                  Show preset bar
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <DropdownMenu>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -984,6 +960,30 @@ export function WorkspaceTaskTabs() {
                     })}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={triggerButtonClassName({
+                  className:
+                    "h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground",
+                })}
+              >
+                <Ellipsis className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onSelect={() => setTaskHistoryOpen(true)}>
+                  Task History
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={showPresetBar}
+                  onCheckedChange={(checked) =>
+                    updateSettings({ patch: { showPresetBar: checked } })
+                  }
+                >
+                  Show preset bar
+                </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
