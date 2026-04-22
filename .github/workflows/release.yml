@@ -45,6 +45,8 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bun install --frozen-lockfile
 
       - name: Rebuild native modules for Electron
