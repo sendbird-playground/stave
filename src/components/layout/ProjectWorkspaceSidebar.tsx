@@ -485,12 +485,18 @@ const WorkspaceRespondingCountBadge = memo(
 );
 
 /**
- * Render a decorative animated beam around the workspace row when any task in
- * the workspace is currently streaming and the user has opted into the Border
- * Beam motion setting. The parent row must be `position: relative`.
+ * Wrap the workspace row with the `border-beam` library's animated glow when a
+ * task in the workspace is streaming and the user opted into the Border Beam
+ * motion setting. The wrapper is always mounted so the DOM stays stable; only
+ * the `active` prop toggles — that lets the library handle fade-in / fade-out
+ * transitions itself. The library's wrapper is `position: relative;
+ * overflow: hidden;`, which would clip the row's subtle `ring-1` / `shadow-sm`
+ * decorations — an intentional trade-off since those states are barely visible
+ * and rewriting them onto this wrapper would bleed per-row state upward.
  */
 const WorkspaceBorderBeam = memo(function WorkspaceBorderBeam(args: {
   workspaceId: string;
+  children: ReactNode;
 }) {
   const { respondingTaskCount } = useWorkspaceSidebarActivityState(
     args.workspaceId,
@@ -498,12 +504,25 @@ const WorkspaceBorderBeam = memo(function WorkspaceBorderBeam(args: {
   const borderBeamEnabled = useAppStore(
     (state) => state.settings.borderBeamEnabled,
   );
+  const borderBeamSize = useAppStore(
+    (state) => state.settings.borderBeamSize,
+  );
+  const borderBeamVariant = useAppStore(
+    (state) => state.settings.borderBeamVariant,
+  );
 
-  if (!borderBeamEnabled || respondingTaskCount === 0) {
-    return null;
-  }
+  const active = borderBeamEnabled && respondingTaskCount > 0;
 
-  return <BorderBeam borderWidth={1} duration={5} />;
+  return (
+    <BorderBeam
+      active={active}
+      size={borderBeamSize}
+      colorVariant={borderBeamVariant}
+      theme="auto"
+    >
+      {args.children}
+    </BorderBeam>
+  );
 });
 
 const IS_MAC =
@@ -1380,6 +1399,11 @@ export function ProjectWorkspaceSidebar(args: {
                                                       dragHandle,
                                                       isDragging,
                                                     }) => (
+                                                      <WorkspaceBorderBeam
+                                                        workspaceId={
+                                                          workspace.id
+                                                        }
+                                                      >
                                                       <div
                                                         className={cn(
                                                           "group/workspace-row relative flex items-center gap-1 rounded-lg border border-transparent bg-transparent transition-[background-color,border-color,box-shadow,color] hover:border-sidebar-border/45 hover:bg-background/20 hover:text-foreground hover:shadow-sm",
@@ -1389,11 +1413,6 @@ export function ProjectWorkspaceSidebar(args: {
                                                             "border-sidebar-border/45 bg-background/22 shadow-sm",
                                                         )}
                                                       >
-                                                        <WorkspaceBorderBeam
-                                                          workspaceId={
-                                                            workspace.id
-                                                          }
-                                                        />
                                                         {dragHandle}
                                                         <WorkspaceHoverPreviewTooltip
                                                           workspaceId={
@@ -1534,6 +1553,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                           ) : null}
                                                         </div>
                                                       </div>
+                                                      </WorkspaceBorderBeam>
                                                     )}
                                                   </SortableSidebarItem>
                                                 );

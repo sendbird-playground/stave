@@ -28,6 +28,19 @@ function setWindowContext() {
     location: {
       href: "https://stave.test/workspace",
     },
+    // `border-beam` (PromptInput decoration) calls `window.matchMedia` during
+    // its initial render for `theme="auto"` detection. The server-render path
+    // below needs a stub so the lib doesn't throw.
+    matchMedia: (_query: string) => ({
+      matches: false,
+      media: _query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
   } as unknown;
 }
 

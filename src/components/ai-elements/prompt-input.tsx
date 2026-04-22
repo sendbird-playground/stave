@@ -439,6 +439,10 @@ export function PromptInput(args: PromptInputProps) {
   const borderBeamEnabled = useAppStore(
     (state) => state.settings.borderBeamEnabled,
   );
+  const borderBeamSize = useAppStore((state) => state.settings.borderBeamSize);
+  const borderBeamVariant = useAppStore(
+    (state) => state.settings.borderBeamVariant,
+  );
   const showBorderBeam = borderBeamEnabled && !minimal && Boolean(isTurnActive);
   const interactionsDisabled = Boolean(disabled);
   const hasDraftPayload =
@@ -998,21 +1002,41 @@ export function PromptInput(args: PromptInputProps) {
 
   return (
     <>
-      <form
-        data-prompt-input-root
-        onSubmit={handleSubmit}
-        onFocusCapture={syncComposerFocus}
-        onBlurCapture={() => {
-          window.requestAnimationFrame(syncComposerFocus);
-        }}
+      {/*
+        BorderBeam wraps the form rather than sitting as an absolute sibling
+        inside it, so the library (which owns its own `<style>` + mask
+        compositing) is the positioning context for the beam layers.
+
+        The `focus-within:ring-*` pulse would be clipped by the library
+        wrapper's `overflow: hidden`, so we relocate it onto the wrapper
+        itself (matching `rounded-xl` on the non-minimal form keeps the ring
+        radius visually aligned with the inner border).
+      */}
+      <BorderBeam
+        active={showBorderBeam}
+        size={borderBeamSize}
+        colorVariant={borderBeamVariant}
+        theme="auto"
         className={cn(
-          "relative space-y-3 transition-[border-color,box-shadow,background-color]",
-          minimal
-            ? "space-y-2 border-0 border-t border-border/60 bg-transparent p-0 pt-3 focus-within:border-border/60"
-            : "rounded-xl border border-border/70 bg-background/95 p-3 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
+          "transition-[box-shadow]",
+          !minimal &&
+            "rounded-xl focus-within:ring-4 focus-within:ring-ring/10",
         )}
       >
-        {showBorderBeam ? <BorderBeam borderWidth={1.5} duration={5} /> : null}
+        <form
+          data-prompt-input-root
+          onSubmit={handleSubmit}
+          onFocusCapture={syncComposerFocus}
+          onBlurCapture={() => {
+            window.requestAnimationFrame(syncComposerFocus);
+          }}
+          className={cn(
+            "relative space-y-3 transition-[border-color,background-color]",
+            minimal
+              ? "space-y-2 border-0 border-t border-border/60 bg-transparent p-0 pt-3 focus-within:border-border/60"
+              : "rounded-xl border border-border/70 bg-background/95 p-3 focus-within:border-ring",
+          )}
+        >
         {!minimal && promptSuggestions && promptSuggestions.length > 0 ? (
           <Suggestions aria-label="Suggestions" className="-ml-1.5 mb-0.5">
             {promptSuggestions.map((suggestion) => (
@@ -1997,7 +2021,8 @@ export function PromptInput(args: PromptInputProps) {
             </Tooltip>
           </div>
         </div>
-      </form>
+        </form>
+      </BorderBeam>
       <ImageLightbox
         open={Boolean(imagePreviewSrc)}
         imageSrc={imagePreviewSrc?.dataUrl ?? ""}

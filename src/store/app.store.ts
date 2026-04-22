@@ -901,6 +901,17 @@ export interface AppSettings {
    * decorative — honors `prefers-reduced-motion`.
    */
   borderBeamEnabled: boolean;
+  /**
+   * Size preset passed to the `border-beam` library. `md` is a full border
+   * glow (default), `sm` is a compact button-sized glow, `line` traces a
+   * bottom-only sweep with breathe/spike animations.
+   */
+  borderBeamSize: "sm" | "md" | "line";
+  /**
+   * Color palette preset passed to the `border-beam` library. These are the
+   * library's own presets — do not remap onto our theme tokens.
+   */
+  borderBeamVariant: "colorful" | "mono" | "ocean" | "sunset";
   /** User-installed custom theme definitions (persisted in localStorage). */
   userCustomThemes: CustomThemeDefinition[];
   themeOverrides: Record<ThemeModeName, ThemeOverrideValues>;
@@ -1826,6 +1837,21 @@ function normalizeReasoningExpansionMode(value: unknown): "auto" | "manual" {
   return value === "auto" ? "auto" : "manual";
 }
 
+function normalizeBorderBeamSize(value: unknown): AppSettings["borderBeamSize"] {
+  return value === "sm" || value === "md" || value === "line" ? value : "md";
+}
+
+function normalizeBorderBeamVariant(
+  value: unknown,
+): AppSettings["borderBeamVariant"] {
+  return value === "colorful" ||
+    value === "mono" ||
+    value === "ocean" ||
+    value === "sunset"
+    ? value
+    : "colorful";
+}
+
 const defaultSettings: AppSettings = {
   appShellMode: "stave",
   showPresetBar: true,
@@ -1833,6 +1859,8 @@ const defaultSettings: AppSettings = {
   customThemeId: null,
   sidebarArtworkMode: DEFAULT_SIDEBAR_ARTWORK_MODE,
   borderBeamEnabled: false,
+  borderBeamSize: "md",
+  borderBeamVariant: "colorful",
   userCustomThemes: [],
   themeOverrides: {
     light: {},
@@ -13500,6 +13528,12 @@ export const useAppStore = create<AppState>()(
             : defaultSettings.showPresetBar;
         state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
           raw.sidebarArtworkMode,
+        );
+        state.settings.borderBeamSize = normalizeBorderBeamSize(
+          raw.borderBeamSize,
+        );
+        state.settings.borderBeamVariant = normalizeBorderBeamVariant(
+          raw.borderBeamVariant,
         );
         if (
           typeof persistedSettings?.terminalFontFamily === "string" &&
