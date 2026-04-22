@@ -31,6 +31,7 @@ import {
 } from "react";
 import {
   Badge,
+  BorderBeam,
   Button,
   Command,
   CommandEmpty,
@@ -55,6 +56,7 @@ import {
   TooltipTrigger,
   buttonVariants,
 } from "@/components/ui";
+import { useAppStore } from "@/store/app.store";
 import { UserInputCard } from "./user-input-card";
 import type {
   CommandPaletteItem,
@@ -434,6 +436,10 @@ export function PromptInput(args: PromptInputProps) {
   const textareaAutosizeFrameRef = useRef<number | null>(null);
   const commandListRef = useRef<HTMLDivElement | null>(null);
   const wasTurnActiveRef = useRef(Boolean(isTurnActive));
+  const borderBeamEnabled = useAppStore(
+    (state) => state.settings.borderBeamEnabled,
+  );
+  const showBorderBeam = borderBeamEnabled && !minimal && Boolean(isTurnActive);
   const interactionsDisabled = Boolean(disabled);
   const hasDraftPayload =
     value.trim().length > 0 ||
@@ -1006,6 +1012,7 @@ export function PromptInput(args: PromptInputProps) {
             : "rounded-xl border border-border/70 bg-background/95 p-3 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
         )}
       >
+        {showBorderBeam ? <BorderBeam borderWidth={1.5} duration={5} /> : null}
         {!minimal && promptSuggestions && promptSuggestions.length > 0 ? (
           <Suggestions aria-label="Suggestions" className="-ml-1.5 mb-0.5">
             {promptSuggestions.map((suggestion) => (

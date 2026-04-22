@@ -963,6 +963,9 @@ function ThemeSection() {
   const sidebarArtworkMode = useAppStore(
     (state) => state.settings.sidebarArtworkMode,
   );
+  const borderBeamEnabled = useAppStore(
+    (state) => state.settings.borderBeamEnabled,
+  );
   const userCustomThemes = useAppStore(
     (state) => state.settings.userCustomThemes,
   );
@@ -1082,6 +1085,20 @@ function ThemeSection() {
               );
             })}
           </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Motion"
+          description="Opt-in animated accents. All motion honors your system Reduced Motion preference."
+        >
+          <SwitchField
+            title="Border Beam"
+            description="Animate a soft highlight around the prompt input and the active workspace row while a task is streaming."
+            checked={borderBeamEnabled}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { borderBeamEnabled: checked } })
+            }
+          />
         </SettingsCard>
 
         <SettingsCard

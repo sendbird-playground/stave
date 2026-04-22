@@ -5,6 +5,7 @@ export {
   AccordionTrigger,
 } from "./accordion";
 export { Badge, badgeVariants } from "./badge";
+export { BorderBeam } from "./border-beam";
 export { Button, buttonVariants } from "./button";
 export { Calendar, CalendarDayButton } from "./calendar";
 export {
