@@ -9,6 +9,8 @@ interface WorkspaceMonacoSupportState {
   typeDefDisposables: MonacoDisposable[];
   sourceFileDisposables: MonacoDisposable[];
   compilerOptionsLoaded: boolean;
+  activeContextKey: string | null;
+  contextVersion: number;
   loadedTypeDefContextKeys: Set<string>;
   loadedSourceContextKeys: Set<string>;
   loadedTypeDefPaths: Set<string>;
@@ -171,11 +173,30 @@ function disposeMonacoDisposables(disposables: MonacoDisposable[]) {
   disposables.length = 0;
 }
 
+function resetWorkspaceMonacoSupportContext(args: {
+  state: WorkspaceMonacoSupportState;
+  nextContextKey: string | null;
+}) {
+  args.state.activeContextKey = args.nextContextKey;
+  args.state.contextVersion += 1;
+  disposeMonacoDisposables(args.state.typeDefDisposables);
+  disposeMonacoDisposables(args.state.sourceFileDisposables);
+  args.state.loadedTypeDefContextKeys.clear();
+  args.state.loadedSourceContextKeys.clear();
+  args.state.loadedTypeDefPaths.clear();
+  args.state.loadedSourceFilePaths.clear();
+  args.state.bootstrapPromises.clear();
+  args.state.typeDefsPromises.clear();
+  args.state.sourceFilesPromises.clear();
+}
+
 function disposeWorkspaceMonacoSupport(state: WorkspaceMonacoSupportState) {
   state.cancelDeferredSourceLoad?.();
   state.cancelDeferredSourceLoad = null;
-  disposeMonacoDisposables(state.typeDefDisposables);
-  disposeMonacoDisposables(state.sourceFileDisposables);
+  resetWorkspaceMonacoSupportContext({
+    state,
+    nextContextKey: null,
+  });
   if (activeWorkspaceMonacoSupport === state) {
     activeWorkspaceMonacoSupport = null;
   }
@@ -193,6 +214,8 @@ function getWorkspaceMonacoSupportState(rootPath: string) {
     typeDefDisposables: [],
     sourceFileDisposables: [],
     compilerOptionsLoaded: false,
+    activeContextKey: null,
+    contextVersion: 0,
     loadedTypeDefContextKeys: new Set<string>(),
     loadedSourceContextKeys: new Set<string>(),
     loadedTypeDefPaths: new Set<string>(),
@@ -338,6 +361,12 @@ async function ensureWorkspaceTypeDefsLoaded(args: {
   entryFilePath?: string;
 }) {
   const contextKey = toWorkspaceSupportContextKey(args.entryFilePath);
+  if (args.state.activeContextKey !== contextKey) {
+    resetWorkspaceMonacoSupportContext({
+      state: args.state,
+      nextContextKey: contextKey,
+    });
+  }
   if (args.state.loadedTypeDefContextKeys.has(contextKey)) {
     return undefined;
   }
@@ -352,12 +381,17 @@ async function ensureWorkspaceTypeDefsLoaded(args: {
     return undefined;
   }
 
+  const contextVersion = args.state.contextVersion;
   const typeDefsPromise = readTypeDefs({
     rootPath: args.state.rootPath,
     entryFilePath: args.entryFilePath,
   })
     .then((result) => {
-      if (activeWorkspaceMonacoSupport !== args.state) {
+      if (
+        activeWorkspaceMonacoSupport !== args.state
+        || args.state.activeContextKey !== contextKey
+        || args.state.contextVersion !== contextVersion
+      ) {
         return;
       }
       args.state.loadedTypeDefContextKeys.add(contextKey);
@@ -377,7 +411,9 @@ async function ensureWorkspaceTypeDefsLoaded(args: {
       }));
     })
     .finally(() => {
-      args.state.typeDefsPromises.delete(contextKey);
+      if (args.state.typeDefsPromises.get(contextKey) === typeDefsPromise) {
+        args.state.typeDefsPromises.delete(contextKey);
+      }
     });
 
   args.state.typeDefsPromises.set(contextKey, typeDefsPromise);
@@ -390,6 +426,12 @@ async function ensureWorkspaceSourceFilesLoaded(args: {
   entryFilePath?: string;
 }) {
   const contextKey = toWorkspaceSupportContextKey(args.entryFilePath);
+  if (args.state.activeContextKey !== contextKey) {
+    resetWorkspaceMonacoSupportContext({
+      state: args.state,
+      nextContextKey: contextKey,
+    });
+  }
   if (args.state.loadedSourceContextKeys.has(contextKey)) {
     return undefined;
   }
@@ -404,12 +446,17 @@ async function ensureWorkspaceSourceFilesLoaded(args: {
     return undefined;
   }
 
+  const contextVersion = args.state.contextVersion;
   const sourceFilesPromise = readSourceFiles({
     rootPath: args.state.rootPath,
     entryFilePath: args.entryFilePath,
   })
     .then((result) => {
-      if (activeWorkspaceMonacoSupport !== args.state) {
+      if (
+        activeWorkspaceMonacoSupport !== args.state
+        || args.state.activeContextKey !== contextKey
+        || args.state.contextVersion !== contextVersion
+      ) {
         return;
       }
       args.state.loadedSourceContextKeys.add(contextKey);
@@ -433,7 +480,9 @@ async function ensureWorkspaceSourceFilesLoaded(args: {
       }));
     })
     .finally(() => {
-      args.state.sourceFilesPromises.delete(contextKey);
+      if (args.state.sourceFilesPromises.get(contextKey) === sourceFilesPromise) {
+        args.state.sourceFilesPromises.delete(contextKey);
+      }
     });
 
   args.state.sourceFilesPromises.set(contextKey, sourceFilesPromise);
@@ -450,8 +499,15 @@ async function ensureWorkspaceTypeScriptBootstrapLoaded(args: {
   if (existingPromise) {
     return existingPromise;
   }
+  if (args.state.activeContextKey !== contextKey) {
+    resetWorkspaceMonacoSupportContext({
+      state: args.state,
+      nextContextKey: contextKey,
+    });
+  }
 
   const bootstrapSequence = ++activeTypeScriptBootstrapSequence;
+  const contextVersion = args.state.contextVersion;
   setMonacoTypeScriptSemanticDiagnosticsEnabled({
     monaco: args.monaco,
     enabled: false,
@@ -468,9 +524,13 @@ async function ensureWorkspaceTypeScriptBootstrapLoaded(args: {
       entryFilePath: args.entryFilePath,
     }),
   ]).then(() => undefined).finally(() => {
-    args.state.bootstrapPromises.delete(contextKey);
+    if (args.state.bootstrapPromises.get(contextKey) === bootstrapPromise) {
+      args.state.bootstrapPromises.delete(contextKey);
+    }
     if (
       activeWorkspaceMonacoSupport === args.state
+      && args.state.activeContextKey === contextKey
+      && args.state.contextVersion === contextVersion
       && activeTypeScriptBootstrapSequence === bootstrapSequence
     ) {
       setMonacoTypeScriptSemanticDiagnosticsEnabled({
@@ -526,6 +586,10 @@ export function syncWorkspaceMonacoSupport(args: {
   if (!args.shouldLoadWorkspaceSupport) {
     supportState.cancelDeferredSourceLoad?.();
     supportState.cancelDeferredSourceLoad = null;
+    resetWorkspaceMonacoSupportContext({
+      state: supportState,
+      nextContextKey: null,
+    });
     setMonacoTypeScriptSemanticDiagnosticsEnabled({
       monaco: args.monaco,
       enabled: true,
@@ -533,6 +597,10 @@ export function syncWorkspaceMonacoSupport(args: {
     return;
   }
 
+  resetWorkspaceMonacoSupportContext({
+    state: supportState,
+    nextContextKey: null,
+  });
   setMonacoTypeScriptSemanticDiagnosticsEnabled({
     monaco: args.monaco,
     enabled: true,

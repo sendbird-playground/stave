@@ -471,7 +471,6 @@ async function lintModelWithEslint(monaco: Monaco, model: MonacoEditorApi.ITextM
   const filePath = toWorkspaceFilePath(model.uri);
 
   if (!eslintApi?.lint || !settings?.eslintEnabled || !filePath || !rootPath) {
-    console.log("[eslint] skip lint:", { hasApi: !!eslintApi?.lint, enabled: settings?.eslintEnabled, filePath, rootPath: !!rootPath });
     return;
   }
 
@@ -480,7 +479,6 @@ async function lintModelWithEslint(monaco: Monaco, model: MonacoEditorApi.ITextM
   }
 
   const result = await eslintApi.lint({ rootPath, filePath, text: model.getValue() });
-  console.log("[eslint] lint result:", { ok: result.ok, detail: result.detail, diagnosticCount: result.diagnostics?.length });
   if (result.ok && result.diagnostics) {
     applyEslintDiagnosticsToModel(monaco, model, result.diagnostics);
   }
