@@ -41,6 +41,7 @@ import {
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { EditorMonacoWarmup } from "@/components/layout/editor-monaco-warmup";
 import { RightRail } from "@/components/layout/RightRail";
+import { dispatchExplorerSearchRequest } from "@/components/layout/explorer-search-events";
 import {
   MIN_CHAT_PANEL_WIDTH,
   MIN_EXPLORER_PANEL_WIDTH,
@@ -243,6 +244,23 @@ export function AppShell() {
   }, [handlePreloadKeyboardShortcuts]);
   const handleOpenCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
+  }, []);
+  const handleOpenExplorerSearch = useCallback(() => {
+    const store = useAppStore.getState();
+    const searchRootPath =
+      store.workspacePathById[store.activeWorkspaceId] ?? store.projectPath;
+    if (!searchRootPath?.trim()) {
+      return;
+    }
+    store.setLayout({
+      patch: {
+        sidebarOverlayVisible: true,
+        sidebarOverlayTab: "explorer",
+      },
+    });
+    window.requestAnimationFrame(() => {
+      dispatchExplorerSearchRequest();
+    });
   }, []);
   const handleOpenStaveMuse = useCallback(() => {
     focusStaveMuse();
@@ -557,6 +575,18 @@ export function AppShell() {
         hasMod &&
         !event.altKey &&
         event.shiftKey &&
+        event.key.toLowerCase() === "f"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleOpenExplorerSearch();
+        return;
+      }
+
+      if (
+        hasMod &&
+        !event.altKey &&
+        event.shiftKey &&
         event.key.toLowerCase() === "p"
       ) {
         event.preventDefault();
@@ -737,6 +767,7 @@ export function AppShell() {
   }, [
     handleFocusFileSearch,
     handleOpenCommandPalette,
+    handleOpenExplorerSearch,
     handleOpenKeyboardShortcuts,
     handleToggleZenMode,
   ]);
@@ -1041,6 +1072,7 @@ export function AppShell() {
         createTask: () => createTask({ title: "" }),
         continueWorkspace: handleContinueWorkspace,
         focusFileSearch: handleFocusFileSearch,
+        openExplorerSearch: handleOpenExplorerSearch,
         openStaveMuse: handleOpenStaveMuse,
         openLatestCompletedTurnTask: handleOpenLatestCompletedTurnTask,
         openInTerminal: async (path: string) => {
@@ -1137,6 +1169,7 @@ export function AppShell() {
       createTask,
       editorVisible,
       handleFocusFileSearch,
+      handleOpenExplorerSearch,
       handleOpenStaveMuse,
       handleOpenLatestCompletedTurnTask,
       handleOpenKeyboardShortcuts,

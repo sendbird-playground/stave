@@ -230,6 +230,12 @@ export function KeyboardShortcutsDrawer({
             sequences: [[modifierLabel, "E"]],
           },
           {
+            label: "Search in files",
+            description:
+              "Open the explorer search UI and search file contents, including pasted multiline code blocks.",
+            sequences: [[modifierLabel, "Shift", "F"]],
+          },
+          {
             label: "Toggle information panel",
             description: "Show or hide the workspace information panel.",
             sequences: [[modifierLabel, "I"]],

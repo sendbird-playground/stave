@@ -30,6 +30,11 @@ import {
   writeFileWithExpectedRevision,
 } from "../utils/filesystem";
 import { getOrCreateRepoMap } from "../utils/repo-map";
+import {
+  buildFilesystemSearchRgArgs,
+  normalizeFilesystemSearchQuery,
+  parseFilesystemSearchMatchLine,
+} from "./filesystem-search";
 import { readWorkspaceSourceFiles } from "./filesystem-source-files";
 import { readWorkspaceTypeDefinitionFiles } from "./filesystem-type-libs";
 
@@ -505,7 +510,8 @@ export function registerFilesystemHandlers() {
   });
 
   ipcMain.handle("fs:search-content", async (_event, args: { rootPath: string; query: string }) => {
-    if (!args.query || !args.rootPath) {
+    const normalizedQuery = normalizeFilesystemSearchQuery(args.query ?? "");
+    if (!normalizedQuery || !args.rootPath) {
       return { ok: false, results: [], stderr: "Missing query or rootPath.", limitHit: false };
     }
     const resolvedRoot = path.resolve(args.rootPath);
@@ -526,35 +532,25 @@ export function registerFilesystemHandlers() {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { rgPath: rawRgPath } = require("@vscode/ripgrep") as { rgPath: string };
       const rgPath = toAsarUnpackedPath(rawRgPath);
-      const rgArgs = [
-        "--line-number",
-        "--no-heading",
-        "--fixed-strings",
-        "--color=never",
-        "--",
-        args.query,
-        ".",
-      ];
+      const rgArgs = buildFilesystemSearchRgArgs(normalizedQuery);
       const child = spawn(rgPath, rgArgs, { cwd: resolvedRoot });
 
       const fileMap = new Map<string, Array<{ line: number; text: string }>>();
       let remainder = "";
       let matchCount = 0;
       let limitHit = false;
-      const lineRegex = /^\.\/(.+?):(\d+):(.*)$/;
+      let stderr = "";
 
       const parseLine = (raw: string) => {
         if (limitHit) return;
-        const m = lineRegex.exec(raw);
-        if (!m) return;
-        const [, file, lineNum, text] = m;
-        if (!file || !lineNum) return;
-        let entries = fileMap.get(file);
+        const parsed = parseFilesystemSearchMatchLine(raw);
+        if (!parsed) return;
+        let entries = fileMap.get(parsed.file);
         if (!entries) {
           entries = [];
-          fileMap.set(file, entries);
+          fileMap.set(parsed.file, entries);
         }
-        entries.push({ line: Number(lineNum), text: text?.trimEnd() ?? "" });
+        entries.push(parsed.match);
         matchCount += 1;
         if (matchCount >= MAX_MATCHES) {
           limitHit = true;
@@ -572,15 +568,26 @@ export function registerFilesystemHandlers() {
           if (limitHit) break;
         }
       });
-      child.stderr.on("data", () => {});
+      child.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
       child.on("error", (error) => {
         resolve({ ok: false, results: [], stderr: String(error), limitHit: false });
       });
-      child.on("close", () => {
+      child.on("close", (code) => {
         if (remainder && !limitHit) {
           parseLine(remainder);
         }
         const results = Array.from(fileMap.entries()).map(([file, matches]) => ({ file, matches }));
+        if (!limitHit && results.length === 0 && code != null && code > 1) {
+          resolve({
+            ok: false,
+            results: [],
+            stderr: stderr.trim() || "Search failed.",
+            limitHit: false,
+          });
+          return;
+        }
         resolve({ ok: true, results, limitHit });
       });
     });

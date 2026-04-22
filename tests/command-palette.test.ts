@@ -80,8 +80,10 @@ function createContext(
       createTask: () => {},
       continueWorkspace: () => {},
       focusFileSearch: () => {},
+      openExplorerSearch: () => {},
       openStaveMuse: () => {},
       openLatestCompletedTurnTask: async () => {},
+      openInGhostty: async () => {},
       openInTerminal: async () => {},
       openInVSCode: async () => {},
       openKeyboardShortcuts: () => {},
@@ -125,6 +127,7 @@ describe("command palette registry", () => {
     expect(provider?.items.some((item) => item.id === "provider.set.codex")).toBe(true);
     expect(view?.items.some((item) => item.id === "view.show-information")).toBe(true);
     expect(view?.items.some((item) => item.id === "view.show-explorer" && item.shortcut === "Cmd+E")).toBe(true);
+    expect(view?.items.some((item) => item.id === "view.search-in-files" && item.shortcut === "Cmd+Shift+F")).toBe(true);
     expect(view?.items.some((item) => item.id === "view.toggle-zen-mode" && item.shortcut === "Cmd+K Z")).toBe(true);
   });
 
