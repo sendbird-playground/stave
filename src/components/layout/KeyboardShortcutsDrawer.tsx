@@ -415,7 +415,7 @@ export function KeyboardShortcutsDrawer({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} direction="top">
-      <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=top]:mb-0 data-[vaul-drawer-direction=top]:h-dvh data-[vaul-drawer-direction=top]:max-h-dvh data-[vaul-drawer-direction=top]:rounded-b-none data-[vaul-drawer-direction=top]:border-b-0">
+      <DrawerContent className="overflow-hidden border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=top]:mb-0 data-[vaul-drawer-direction=top]:h-dvh data-[vaul-drawer-direction=top]:max-h-dvh data-[vaul-drawer-direction=top]:rounded-b-none data-[vaul-drawer-direction=top]:border-b-0">
         <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col">
           <DrawerHeader className="shrink-0 gap-0 border-b border-border/70 px-5 pb-5 pt-5 !text-left md:px-6">
             <div className="flex items-center justify-between gap-3">
@@ -440,7 +440,10 @@ export function KeyboardShortcutsDrawer({
               </Badge>
             </div>
           </DrawerHeader>
-          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-4">
+          <div
+            data-vaul-no-drag
+            className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-4"
+          >
             {sections.map((section) => (
               <Card
                 key={section.title}
@@ -476,8 +479,8 @@ export function KeyboardShortcutsDrawer({
               </Card>
             ))}
           </div>
-          <DrawerFooter className="shrink-0 border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
-            <p className="text-sm text-muted-foreground">
+          <DrawerFooter className="mt-0 shrink-0 border-t border-border/70 px-5 py-4 md:flex-row md:items-start md:justify-between md:px-6">
+            <p className="max-w-4xl text-sm text-muted-foreground">
               Workspace quick jump follows the sidebar's top-to-bottom order.
               Quick open and the shortcut guide are ignored while typing in
               inputs, and command palette, plan mode, model selector, model
