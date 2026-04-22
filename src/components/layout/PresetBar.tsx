@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { Cog, Ellipsis, Plus, SquareTerminal } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Cog, Ellipsis, SquareTerminal } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
 import {
@@ -12,21 +12,14 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui";
-import {
-  getDefaultModelForProvider,
-  toHumanModelName,
-} from "@/lib/providers/model-catalog";
-import { generatePresetId, type TaskPreset } from "@/lib/task-presets";
+import { toHumanModelName } from "@/lib/providers/model-catalog";
+import { type TaskPreset } from "@/lib/task-presets";
 import { cn } from "@/lib/utils";
 import { STAVE_OPEN_SETTINGS_EVENT, useAppStore } from "@/store/app.store";
 import { TaskPresetEditor } from "@/components/layout/task-preset-editor";
 
-type PresetEditorTarget =
-  | { kind: "edit"; presetId: string }
-  | { kind: "new" }
-  | null;
+type PresetEditorTarget = { kind: "edit"; presetId: string } | null;
 
 /**
  * Horizontal quick-launch bar between the task tab strip and the chat panel.
@@ -93,21 +86,6 @@ export function PresetBar() {
     );
   }, []);
 
-  // Regenerate the draft id every time the "new" popover transitions open so
-  // successive adds don't collide on the same id (`upsertTaskPreset` treats
-  // the id as the upsert key).
-  const isAddingNew = editorTarget?.kind === "new";
-  const newPresetDraft = useMemo<TaskPreset>(
-    () => ({
-      id: generatePresetId(),
-      label: "",
-      kind: "task",
-      provider: "claude-code",
-      model: getDefaultModelForProvider({ providerId: "claude-code" }),
-    }),
-    [isAddingNew],
-  );
-
   return (
     <div
       className={cn(
@@ -149,32 +127,6 @@ export function PresetBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <Popover
-          open={editorTarget?.kind === "new"}
-          onOpenChange={(open) =>
-            setEditorTarget(open ? { kind: "new" } : null)
-          }
-        >
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
-              aria-label="Add preset"
-            >
-              <Plus className="size-3.5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-72">
-            <TaskPresetEditor
-              initialPreset={newPresetDraft}
-              submitLabel="Add preset"
-              onSave={handleSavePreset}
-              onCancel={() => setEditorTarget(null)}
-            />
-          </PopoverContent>
-        </Popover>
         <Button
           type="button"
           variant="ghost"
