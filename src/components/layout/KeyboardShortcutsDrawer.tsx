@@ -442,12 +442,12 @@ export function KeyboardShortcutsDrawer({
           </DrawerHeader>
           <div
             data-vaul-no-drag
-            className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-4"
+            className="grid min-h-0 flex-1 auto-rows-max content-start items-start gap-4 overflow-y-auto overscroll-contain px-5 py-5 md:grid-cols-2 md:px-6 xl:grid-cols-4"
           >
             {sections.map((section) => (
               <Card
                 key={section.title}
-                className="border-border/70 bg-background/75 shadow-sm"
+                className="self-start border-border/70 bg-background/75 shadow-sm"
               >
                 <CardHeader className="gap-1.5 pb-3">
                   <CardTitle className="text-sm font-semibold">
