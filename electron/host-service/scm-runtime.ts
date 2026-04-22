@@ -89,7 +89,9 @@ export async function discardSourceControlPath(args: {
   return {
     ok: false,
     code: cleanResult.code,
-    stdout: [restoreResult.stdout, cleanResult.stdout].filter(Boolean).join("\n"),
+    stdout: [restoreResult.stdout, cleanResult.stdout]
+      .filter(Boolean)
+      .join("\n"),
     stderr: [restoreResult.stderr, cleanResult.stderr]
       .filter(Boolean)
       .join("\n")
@@ -97,7 +99,10 @@ export async function discardSourceControlPath(args: {
   };
 }
 
-export async function fetchGitHubPrStatus(args: { cwd?: string; target?: string }) {
+export async function fetchGitHubPrStatus(args: {
+  cwd?: string;
+  target?: string;
+}) {
   const authResult = await runCommand({
     command: "gh auth status",
     cwd: args.cwd,
@@ -120,9 +125,9 @@ export async function fetchGitHubPrStatus(args: { cwd?: string; target?: string 
 
   if (!result.ok) {
     const noPr =
-      result.stderr.includes("no pull requests found")
-      || result.stderr.includes("Could not resolve")
-      || result.stderr.includes("no open pull requests");
+      result.stderr.includes("no pull requests found") ||
+      result.stderr.includes("Could not resolve") ||
+      result.stderr.includes("no open pull requests");
     if (noPr) {
       return { ok: true, pr: null, stderr: "" };
     }
@@ -141,20 +146,22 @@ export async function fetchGitHubPrStatus(args: { cwd?: string; target?: string 
       const nonCheckRuns: Array<Record<string, unknown>> = [];
       for (const check of checks as Array<Record<string, unknown>>) {
         if (
-          check.__typename === "CheckRun"
-          && typeof check.name === "string"
-          && check.name
+          check.__typename === "CheckRun" &&
+          typeof check.name === "string" &&
+          check.name
         ) {
           const existing = latestCheckRunByName.get(check.name);
           if (!existing) {
             latestCheckRunByName.set(check.name, check);
           } else {
-            const existingTime = typeof existing.startedAt === "string"
-              ? new Date(existing.startedAt).getTime()
-              : 0;
-            const currentTime = typeof check.startedAt === "string"
-              ? new Date(check.startedAt).getTime()
-              : 0;
+            const existingTime =
+              typeof existing.startedAt === "string"
+                ? new Date(existing.startedAt).getTime()
+                : 0;
+            const currentTime =
+              typeof check.startedAt === "string"
+                ? new Date(check.startedAt).getTime()
+                : 0;
             if (currentTime > existingTime) {
               latestCheckRunByName.set(check.name, check);
             }
@@ -168,10 +175,10 @@ export async function fetchGitHubPrStatus(args: { cwd?: string; target?: string 
       const hasFailure = dedupedChecks.some((check) => {
         if (check.__typename === "CheckRun") {
           return (
-            check.conclusion === "FAILURE"
-            || check.conclusion === "CANCELLED"
-            || check.conclusion === "TIMED_OUT"
-            || check.conclusion === "ACTION_REQUIRED"
+            check.conclusion === "FAILURE" ||
+            check.conclusion === "CANCELLED" ||
+            check.conclusion === "TIMED_OUT" ||
+            check.conclusion === "ACTION_REQUIRED"
           );
         }
         if (check.__typename === "StatusContext") {
@@ -258,7 +265,11 @@ export async function tryAutoFixLintErrors(args: { cwd?: string }) {
     cwd: args.cwd,
   });
   if (!stagedResult.ok || !stagedResult.stdout.trim()) {
-    return { ok: false, fixAttempted: false, stderr: "No staged files to fix." };
+    return {
+      ok: false,
+      fixAttempted: false,
+      stderr: "No staged files to fix.",
+    };
   }
 
   const files = stagedResult.stdout.trim().split("\n").filter(Boolean);
@@ -266,7 +277,11 @@ export async function tryAutoFixLintErrors(args: { cwd?: string }) {
     /\.(js|jsx|ts|tsx|mjs|cjs|vue|svelte)$/.test(f),
   );
   if (lintableFiles.length === 0) {
-    return { ok: false, fixAttempted: false, stderr: "No lintable staged files." };
+    return {
+      ok: false,
+      fixAttempted: false,
+      stderr: "No lintable staged files.",
+    };
   }
 
   const fileArgs = lintableFiles
@@ -314,7 +329,7 @@ export function commitSourceControl(args: { message: string; cwd?: string }) {
       stderr: "Commit message is required.",
     });
   }
-  const escapedMessage = message.replaceAll("\"", "\\\"");
+  const escapedMessage = message.replaceAll('"', '\\"');
   return runCommand({
     command: `git commit -m "${escapedMessage}"`,
     cwd: args.cwd,
@@ -339,7 +354,10 @@ export function unstageSourceControlFile(args: { path: string; cwd?: string }) {
   });
 }
 
-export async function diffSourceControlFile(args: { path: string; cwd?: string }) {
+export async function diffSourceControlFile(args: {
+  path: string;
+  cwd?: string;
+}) {
   const paths = resolveSourceControlDiffPaths({ rawPath: args.path });
   const pathspecArg = toGitPathspecArg(paths.pathspecs);
   const [staged, unstaged, oldContent, newContent] = await Promise.all([
@@ -384,8 +402,16 @@ export async function getScmHistory(args: { cwd?: string; limit?: number }) {
   return { ok: result.ok, items, stderr: result.stderr };
 }
 
-export async function listScmBranches(args: { cwd?: string }) {
-  await runCommand({ command: "git remote prune origin", cwd: args.cwd });
+export async function listScmBranches(args: {
+  cwd?: string;
+  refreshRemote?: boolean;
+}) {
+  const refreshResult = await runCommand({
+    command: args.refreshRemote
+      ? "git fetch --all --prune"
+      : "git remote prune origin",
+    cwd: args.cwd,
+  });
 
   const [listResult, listRemoteResult, currentResult, worktreeResult] =
     await Promise.all([
@@ -423,20 +449,26 @@ export async function listScmBranches(args: { cwd?: string }) {
           .split("\n")
           .map((name) => name.trim())
           .filter(
-            (name) => Boolean(name) && name.includes("/") && !name.endsWith("/HEAD"),
+            (name) =>
+              Boolean(name) && name.includes("/") && !name.endsWith("/HEAD"),
           )
       : [],
     worktreePathByBranch: worktreeResult.ok
       ? parseWorktreePathByBranch({ stdout: worktreeResult.stdout })
       : {},
     stderr: [listResult.stderr, currentResult.stderr]
+      .concat(refreshResult.stderr ? [refreshResult.stderr] : [])
       .filter(Boolean)
       .join("\n")
       .trim(),
   };
 }
 
-export function createScmBranch(args: { name: string; cwd?: string; from?: string }) {
+export function createScmBranch(args: {
+  name: string;
+  cwd?: string;
+  from?: string;
+}) {
   const name = args.name.trim();
   if (!name) {
     return Promise.resolve({

@@ -857,7 +857,7 @@ interface WindowSourceControlApi {
     items: Array<{ hash: string; relativeDate: string; subject: string }>;
     stderr: string;
   }>;
-  listBranches?: (args: { cwd?: string }) => Promise<{
+  listBranches?: (args: { cwd?: string; refreshRemote?: boolean }) => Promise<{
     ok: boolean;
     current: string;
     branches: string[];
