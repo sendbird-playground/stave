@@ -6,7 +6,7 @@ import {
   PanelLeft,
 } from "lucide-react";
 import { GhosttyIcon, VSCodeIcon } from "@/components/brand-icons";
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Button,
@@ -33,11 +33,13 @@ import {
 import { formatRepoMapForContext } from "@/lib/fs/repo-map.types";
 import { formatWorkspacePathLabel } from "@/store/project.utils";
 
-const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
+const IS_MAC =
+  typeof window !== "undefined" && window.api?.platform === "darwin";
 const TOP_BAR_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 const TOP_BAR_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
 export function TopBar() {
+  const [workspacePathMenuOpen, setWorkspacePathMenuOpen] = useState(false);
   const [
     activeWorkspaceId,
     workspacePathById,
@@ -126,9 +128,7 @@ export function TopBar() {
                   <PanelLeft className="size-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">
-                Expand Project List
-              </TooltipContent>
+              <TooltipContent side="bottom">Expand Project List</TooltipContent>
             </Tooltip>
           ) : null}
           {hasProjectContext && activeWorkspacePath ? (
@@ -149,7 +149,10 @@ export function TopBar() {
                   {activeWorkspacePath}
                 </TooltipContent>
               </Tooltip>
-              <DropdownMenu>
+              <DropdownMenu
+                open={workspacePathMenuOpen}
+                onOpenChange={setWorkspacePathMenuOpen}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
@@ -168,41 +171,45 @@ export function TopBar() {
                 </Tooltip>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
                   <DropdownMenuItem
-                    onClick={() =>
+                    onSelect={() => {
+                      setWorkspacePathMenuOpen(false);
                       void window.api?.shell?.showInFinder?.({
                         path: activeWorkspacePath,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <FolderOpen className="size-4" />
                     Open in Finder
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() =>
+                    onSelect={() => {
+                      setWorkspacePathMenuOpen(false);
                       void window.api?.shell?.openInVSCode?.({
                         path: activeWorkspacePath,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <VSCodeIcon className="size-4" />
                     Open in VS Code
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() =>
+                    onSelect={() => {
+                      setWorkspacePathMenuOpen(false);
                       void window.api?.shell?.openInGhostty?.({
                         path: activeWorkspacePath,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <GhosttyIcon className="size-4" />
                     Open in Ghostty
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() =>
+                    onSelect={() => {
+                      setWorkspacePathMenuOpen(false);
                       void window.api?.shell?.openInTerminal?.({
                         path: activeWorkspacePath,
-                      })
-                    }
+                      });
+                    }}
                   >
                     <SquareTerminal className="size-4" />
                     Open in Terminal

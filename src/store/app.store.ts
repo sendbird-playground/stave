@@ -79,6 +79,11 @@ import {
 } from "@/lib/providers/model-catalog";
 import { normalizeModelShortcutKeys } from "@/lib/providers/model-shortcuts";
 import {
+  DEFAULT_APP_SHORTCUT_KEYS,
+  normalizeAppShortcutKeys,
+  type AppShortcutKeys,
+} from "@/lib/app-shortcuts";
+import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
   DEFAULT_PROMPT_PR_DESCRIPTION,
   DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN,
@@ -979,6 +984,8 @@ export interface AppSettings {
   commandPalettePinnedCommandIds: string[];
   commandPaletteHiddenCommandIds: string[];
   commandPaletteRecentCommandIds: string[];
+  /** Cmd/Ctrl+K shell chord bindings for navigation and panel actions. */
+  appShortcutKeys: AppShortcutKeys;
   /** Alt+1..0 prompt-model bindings, stored as `provider:model` keys. */
   modelShortcutKeys: string[];
   reviewStrictMode: boolean;
@@ -1909,6 +1916,7 @@ const defaultSettings: AppSettings = {
   commandPalettePinnedCommandIds: [],
   commandPaletteHiddenCommandIds: [],
   commandPaletteRecentCommandIds: [],
+  appShortcutKeys: { ...DEFAULT_APP_SHORTCUT_KEYS },
   modelShortcutKeys: normalizeModelShortcutKeys(),
   reviewStrictMode: true,
   reviewChecklistPreset: "safety-first",
@@ -6787,6 +6795,13 @@ export const useAppStore = create<AppState>()(
               : {
                   sharedSkillsHome: normalizeSharedSkillsHomeSetting(
                     patch.sharedSkillsHome,
+                  ),
+                }),
+            ...(patch.appShortcutKeys === undefined
+              ? {}
+              : {
+                  appShortcutKeys: normalizeAppShortcutKeys(
+                    patch.appShortcutKeys,
                   ),
                 }),
             ...(patch.modelShortcutKeys === undefined
@@ -13575,6 +13590,9 @@ export const useAppStore = create<AppState>()(
               (value: unknown): value is string => typeof value === "string",
             )
           : defaultSettings.commandPaletteRecentCommandIds;
+        state.settings.appShortcutKeys = normalizeAppShortcutKeys(
+          raw.appShortcutKeys,
+        );
         state.settings.taskPresets = normalizePersistedTaskPresets(
           raw.taskPresets,
         );

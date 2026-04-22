@@ -26,6 +26,10 @@ import {
   normalizeModelShortcutKeys,
 } from "@/lib/providers/model-shortcuts";
 import {
+  buildAppShortcutSequences,
+  normalizeAppShortcutKeys,
+} from "@/lib/app-shortcuts";
+import {
   getTaskPresetShortcutLabel,
   TASK_PRESET_SHORTCUT_SLOT_LABELS,
 } from "@/lib/task-presets";
@@ -88,11 +92,20 @@ export function KeyboardShortcutsDrawer({
         : "Ctrl",
     [],
   );
-  const [storedModelShortcutKeys, taskPresets] = useAppStore(
-    useShallow(
-      (state) =>
-        [state.settings.modelShortcutKeys, state.settings.taskPresets] as const,
-    ),
+  const [storedModelShortcutKeys, storedAppShortcutKeys, taskPresets] =
+    useAppStore(
+      useShallow(
+        (state) =>
+          [
+            state.settings.modelShortcutKeys,
+            state.settings.appShortcutKeys,
+            state.settings.taskPresets,
+          ] as const,
+      ),
+    );
+  const normalizedAppShortcutKeys = useMemo(
+    () => normalizeAppShortcutKeys(storedAppShortcutKeys),
+    [storedAppShortcutKeys],
   );
   const normalizedModelShortcutKeys = useMemo(
     () => normalizeModelShortcutKeys(storedModelShortcutKeys),
@@ -156,6 +169,39 @@ export function KeyboardShortcutsDrawer({
       },
     ];
   }, [taskPresets]);
+  const buildShellShortcutItem = (
+    args: Pick<ShortcutItem, "label" | "description"> & {
+      actionId:
+        | "navigation.home"
+        | "navigation.open-stave-muse"
+        | "view.toggle-workspace-sidebar"
+        | "view.toggle-changes-panel"
+        | "view.show-explorer"
+        | "view.show-information"
+        | "view.show-scripts"
+        | "view.show-lens"
+        | "view.toggle-editor"
+        | "view.toggle-terminal"
+        | "view.toggle-zen-mode";
+    },
+  ): ShortcutItem => {
+    const sequences = buildAppShortcutSequences({
+      actionId: args.actionId,
+      modifierLabel,
+      shortcutKeys: normalizedAppShortcutKeys,
+    });
+    const isDisabled =
+      sequences.length === 1 && sequences[0]?.[0] === "Disabled";
+
+    return {
+      label: args.label,
+      description: isDisabled
+        ? `${args.description} Disabled in Settings -> Command Palette.`
+        : args.description,
+      sequences,
+      sequenceJoiner: isDisabled ? "or" : "then",
+    };
+  };
 
   if (!open) {
     return null;
@@ -212,57 +258,74 @@ export function KeyboardShortcutsDrawer({
         title: "Panels",
         description: "Control the shell layout without leaving the keyboard.",
         shortcuts: [
-          {
+          buildShellShortcutItem({
+            actionId: "view.toggle-workspace-sidebar",
             label: "Toggle workspace sidebar",
             description:
               "Collapse or expand the left project and workspace list.",
-            sequences: [[modifierLabel, "B"]],
-          },
-          {
+          }),
+          buildShellShortcutItem({
+            actionId: "view.toggle-changes-panel",
             label: "Source control panel",
             description:
               "Show or hide the source control overlay on the right rail.",
-            sequences: [[modifierLabel, "Shift", "B"]],
-          },
-          {
+          }),
+          buildShellShortcutItem({
+            actionId: "view.show-explorer",
             label: "Open explorer panel",
             description: "Open the explorer overlay on the right rail.",
-            sequences: [[modifierLabel, "E"]],
-          },
+          }),
           {
             label: "Search in files",
             description:
               "Open the explorer search UI and search file contents, including pasted multiline code blocks.",
             sequences: [[modifierLabel, "Shift", "F"]],
           },
-          {
+          buildShellShortcutItem({
+            actionId: "view.show-information",
             label: "Toggle information panel",
             description: "Show or hide the workspace information panel.",
-            sequences: [[modifierLabel, "I"]],
-          },
-          {
+          }),
+          buildShellShortcutItem({
+            actionId: "view.show-scripts",
+            label: "Open scripts panel",
+            description:
+              "Open the workspace scripts runtime, hooks, and services panel.",
+          }),
+          buildShellShortcutItem({
+            actionId: "view.show-lens",
+            label: "Open Lens panel",
+            description:
+              "Open the embedded browser for preview, inspection, and picking.",
+          }),
+          buildShellShortcutItem({
+            actionId: "view.toggle-editor",
             label: "Toggle editor",
             description: "Show or hide the editor panel.",
-            sequences: [[modifierLabel, "\\"]],
-          },
-          {
+          }),
+          buildShellShortcutItem({
+            actionId: "view.toggle-terminal",
             label: "Toggle terminal",
             description: "Dock or hide the terminal panel.",
-            sequences: [[modifierLabel, "`"]],
-          },
-          {
+          }),
+          buildShellShortcutItem({
+            actionId: "view.toggle-zen-mode",
             label: "Toggle Zen mode",
             description:
               "Hide surrounding workspace chrome and suppress thinking details to focus on chat and results.",
-            sequences: [[modifierLabel, "K"], ["Z"]],
-            sequenceJoiner: "then",
-          },
+          }),
         ],
       },
       {
         title: "Actions",
         description: "Common task and editor commands.",
         shortcuts: [
+          buildShellShortcutItem({
+            actionId: "navigation.home",
+            label: "Go home",
+            description:
+              "Clear the active task selection and return to the project overview.",
+          }),
           {
             label: "Focus prompt composer",
             description:
@@ -277,6 +340,11 @@ export function KeyboardShortcutsDrawer({
             description: "Open the prompt model picker from the keyboard.",
             sequences: [["Alt", "P"]],
           },
+          buildShellShortcutItem({
+            actionId: "navigation.open-stave-muse",
+            label: "Open Stave Muse",
+            description: "Open the global Muse widget for app-wide workflows.",
+          }),
           {
             label: "Quick open file",
             description:
@@ -337,7 +405,12 @@ export function KeyboardShortcutsDrawer({
         ],
       },
     ],
-    [modelShortcutItems, modifierLabel, presetShortcutItems],
+    [
+      modelShortcutItems,
+      modifierLabel,
+      normalizedAppShortcutKeys,
+      presetShortcutItems,
+    ],
   );
 
   return (
@@ -408,7 +481,7 @@ export function KeyboardShortcutsDrawer({
               Workspace quick jump follows the sidebar's top-to-bottom order.
               Quick open and the shortcut guide are ignored while typing in
               inputs, and command palette, plan mode, model selector, model
-              shortcuts, and Zen mode shortcuts stay globally available.
+              shortcuts, and shell chords stay globally available.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>

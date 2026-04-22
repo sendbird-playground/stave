@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  assignAppShortcutKey,
+  normalizeAppShortcutKeys,
+} from "@/lib/app-shortcuts";
+import {
   buildCommandPaletteGroups,
   recordRecentCommandPaletteAction,
   registerCommandPaletteContributor,
@@ -15,6 +19,7 @@ function createContext(
     activeWorkspaceBranch: "feature/command-palette",
     activeWorkspaceIsDefault: false,
     activeWorkspacePrStatus: "no_pr",
+    appShortcutKeys: normalizeAppShortcutKeys(),
     hasActiveTurn: true,
     layout: {
       editorVisible: true,
@@ -117,62 +122,189 @@ describe("command palette registry", () => {
     const provider = groups.find((group) => group.key === "provider");
     const view = groups.find((group) => group.key === "view");
 
-    expect(navigation?.items.some((item) => item.id === "navigation.quick-open-file")).toBe(true);
-    expect(navigation?.items.some((item) => item.id === "navigation.open-stave-muse")).toBe(true);
-    expect(navigation?.items.some((item) => item.id === "navigation.latest-completed-turn-task")).toBe(true);
-    expect(navigation?.items.some((item) => item.id === "task.select.task-2")).toBe(true);
-    expect(navigation?.items.some((item) => item.id === "workspace.select.ws-feature")).toBe(true);
+    expect(
+      navigation?.items.some(
+        (item) => item.id === "navigation.quick-open-file",
+      ),
+    ).toBe(true);
+    expect(
+      navigation?.items.some(
+        (item) => item.id === "navigation.home" && item.shortcut === "Cmd+K H",
+      ),
+    ).toBe(true);
+    expect(
+      navigation?.items.some(
+        (item) =>
+          item.id === "navigation.open-stave-muse" &&
+          item.shortcut === "Cmd+K M",
+      ),
+    ).toBe(true);
+    expect(
+      navigation?.items.some(
+        (item) => item.id === "navigation.latest-completed-turn-task",
+      ),
+    ).toBe(true);
+    expect(
+      navigation?.items.some((item) => item.id === "task.select.task-2"),
+    ).toBe(true);
+    expect(
+      navigation?.items.some(
+        (item) => item.id === "workspace.select.ws-feature",
+      ),
+    ).toBe(true);
     expect(task?.items.some((item) => item.id === "task.create-pr")).toBe(true);
-    expect(task?.items.some((item) => item.id === "task.stop-active-turn")).toBe(true);
-    expect(provider?.items.some((item) => item.id === "provider.set.codex")).toBe(true);
-    expect(view?.items.some((item) => item.id === "view.show-information")).toBe(true);
-    expect(view?.items.some((item) => item.id === "view.show-explorer" && item.shortcut === "Cmd+E")).toBe(true);
-    expect(view?.items.some((item) => item.id === "view.search-in-files" && item.shortcut === "Cmd+Shift+F")).toBe(true);
-    expect(view?.items.some((item) => item.id === "view.toggle-zen-mode" && item.shortcut === "Cmd+K Z")).toBe(true);
+    expect(
+      task?.items.some((item) => item.id === "task.stop-active-turn"),
+    ).toBe(true);
+    expect(
+      provider?.items.some((item) => item.id === "provider.set.codex"),
+    ).toBe(true);
+    expect(
+      view?.items.some((item) => item.id === "view.show-information"),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.show-explorer" && item.shortcut === "Cmd+K E",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.search-in-files" && item.shortcut === "Cmd+Shift+F",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.toggle-workspace-sidebar" &&
+          item.shortcut === "Cmd+K B",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.toggle-changes-panel" &&
+          item.shortcut === "Cmd+K C",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.show-information" && item.shortcut === "Cmd+K I",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.toggle-editor" && item.shortcut === "Cmd+K \\",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.toggle-terminal" && item.shortcut === "Cmd+K `",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.show-scripts" && item.shortcut === "Cmd+K S",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) => item.id === "view.show-lens" && item.shortcut === "Cmd+K L",
+      ),
+    ).toBe(true);
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.toggle-zen-mode" && item.shortcut === "Cmd+K Z",
+      ),
+    ).toBe(true);
   });
 
   test("switches zen-mode command label when zen mode is active", () => {
-    const groups = buildCommandPaletteGroups(createContext({
-      layout: {
-        editorVisible: true,
-        sidebarOverlayTab: "explorer",
-        sidebarOverlayVisible: false,
-        terminalDocked: false,
-        workspaceSidebarCollapsed: false,
-        zenMode: true,
-      },
-    }));
+    const groups = buildCommandPaletteGroups(
+      createContext({
+        layout: {
+          editorVisible: true,
+          sidebarOverlayTab: "explorer",
+          sidebarOverlayVisible: false,
+          terminalDocked: false,
+          workspaceSidebarCollapsed: false,
+          zenMode: true,
+        },
+      }),
+    );
     const view = groups.find((group) => group.key === "view");
-    const zenModeAction = view?.items.find((item) => item.id === "view.toggle-zen-mode");
+    const zenModeAction = view?.items.find(
+      (item) => item.id === "view.toggle-zen-mode",
+    );
 
     expect(zenModeAction?.title).toBe("Exit Zen Mode");
   });
 
+  test("uses customized shell chord labels for panel actions", () => {
+    const groups = buildCommandPaletteGroups(
+      createContext({
+        appShortcutKeys: assignAppShortcutKey({
+          actionId: "view.show-explorer",
+          shortcutKeys: normalizeAppShortcutKeys(),
+          nextKey: "x",
+        }),
+      }),
+    );
+    const view = groups.find((group) => group.key === "view");
+
+    expect(
+      view?.items.some(
+        (item) =>
+          item.id === "view.show-explorer" && item.shortcut === "Cmd+K X",
+      ),
+    ).toBe(true);
+  });
+
   test("shows continue workspace only for completed PR branches", () => {
-    const groups = buildCommandPaletteGroups(createContext({
-      activeWorkspacePrStatus: "merged",
-    }));
+    const groups = buildCommandPaletteGroups(
+      createContext({
+        activeWorkspacePrStatus: "merged",
+      }),
+    );
     const task = groups.find((group) => group.key === "task");
 
-    expect(task?.items.some((item) => item.id === "task.continue-workspace")).toBe(true);
-    expect(task?.items.some((item) => item.id === "task.create-pr")).toBe(false);
+    expect(
+      task?.items.some((item) => item.id === "task.continue-workspace"),
+    ).toBe(true);
+    expect(task?.items.some((item) => item.id === "task.create-pr")).toBe(
+      false,
+    );
   });
 
   test("applies pinned, hidden, and recent preferences in presentation order", () => {
-    const groups = buildCommandPaletteGroups(createContext({
-      preferences: {
-        hiddenIds: ["workspace.refresh-workspaces"],
-        pinnedIds: ["settings.open.command-palette"],
-        recentIds: ["task.save-file", "settings.open.command-palette"],
-        showRecent: true,
-      },
-    }));
+    const groups = buildCommandPaletteGroups(
+      createContext({
+        preferences: {
+          hiddenIds: ["workspace.refresh-workspaces"],
+          pinnedIds: ["settings.open.command-palette"],
+          recentIds: ["task.save-file", "settings.open.command-palette"],
+          showRecent: true,
+        },
+      }),
+    );
 
     expect(groups[0]?.key).toBe("pinned");
-    expect(groups[0]?.items.map((item) => item.id)).toEqual(["settings.open.command-palette"]);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      "settings.open.command-palette",
+    ]);
     expect(groups[1]?.key).toBe("recent");
     expect(groups[1]?.items.map((item) => item.id)).toEqual(["task.save-file"]);
-    expect(groups.some((group) => group.items.some((item) => item.id === "workspace.refresh-workspaces"))).toBe(false);
+    expect(
+      groups.some((group) =>
+        group.items.some((item) => item.id === "workspace.refresh-workspaces"),
+      ),
+    ).toBe(false);
   });
 
   test("records recent commands with de-dupe and size limit", () => {
@@ -214,12 +346,20 @@ describe("command palette registry", () => {
 
     try {
       const withContributor = buildCommandPaletteGroups(createContext());
-      expect(withContributor.some((group) => group.items.some((item) => item.id === "contrib.test"))).toBe(true);
+      expect(
+        withContributor.some((group) =>
+          group.items.some((item) => item.id === "contrib.test"),
+        ),
+      ).toBe(true);
     } finally {
       dispose();
     }
 
     const withoutContributor = buildCommandPaletteGroups(createContext());
-    expect(withoutContributor.some((group) => group.items.some((item) => item.id === "contrib.test"))).toBe(false);
+    expect(
+      withoutContributor.some((group) =>
+        group.items.some((item) => item.id === "contrib.test"),
+      ),
+    ).toBe(false);
   });
 });

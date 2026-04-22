@@ -115,8 +115,7 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
       const parentDraft = state.promptDraftByTask[args.parentTaskId];
       const reviewerProvider: ProviderId =
         (parentTask?.provider as ProviderId | undefined) ?? "claude-code";
-      const reviewerModel =
-        parentDraft?.runtimeOverrides?.model ?? "";
+      const reviewerModel = parentDraft?.runtimeOverrides?.model ?? "";
       return [
         grp,
         runningCount,
@@ -213,7 +212,11 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
             variant="secondary"
             className="shrink-0 rounded-sm text-[10px] uppercase tracking-[0.14em]"
           >
-            {championTaskId ? "Promoted" : runningBranches > 0 ? "Running" : "Ready"}
+            {championTaskId
+              ? "Promoted"
+              : runningBranches > 0
+                ? "Running"
+                : "Ready"}
           </Badge>
           <span className="shrink-0 text-xs text-muted-foreground">
             {headerStatusLabel}
@@ -259,7 +262,9 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
                     variant="outline"
                     className="h-7 gap-1.5 rounded-sm px-2 text-xs shadow-none"
                     onClick={() =>
-                      unpickColiseumChampion({ parentTaskId: args.parentTaskId })
+                      unpickColiseumChampion({
+                        parentTaskId: args.parentTaskId,
+                      })
                     }
                   >
                     <Undo2 className="size-3.5" />
@@ -296,7 +301,7 @@ function ColiseumArenaPanelImpl(args: ColiseumArenaPanelProps) {
                   return (
                     <DropdownMenuItem
                       key={branchId}
-                      onClick={() =>
+                      onSelect={() =>
                         enqueueParentFollowUp({
                           parentTaskId: args.parentTaskId,
                           branchTaskId: branchId,
@@ -844,7 +849,10 @@ function ColiseumBranchColumn(args: ColiseumBranchColumnProps) {
         onScroll={(event) => {
           const container = event.currentTarget;
           shouldStickToBottomRef.current =
-            container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+            container.scrollHeight -
+              container.scrollTop -
+              container.clientHeight <
+            48;
         }}
       >
         {priorMessages.length > 0 ? (
@@ -985,9 +993,7 @@ interface BranchFileChange {
  * the tool names observed (Edit, Write, NotebookEdit, …) and `count` is the
  * number of occurrences — useful as a rough "activity" signal.
  */
-function extractBranchFileChanges(
-  messages: ChatMessage[],
-): BranchFileChange[] {
+function extractBranchFileChanges(messages: ChatMessage[]): BranchFileChange[] {
   const byPath = new Map<string, { actions: Set<string>; count: number }>();
   for (const message of messages) {
     if (message.role !== "assistant") continue;

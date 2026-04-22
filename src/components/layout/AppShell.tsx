@@ -50,12 +50,12 @@ import {
   resolveDesktopRightPanelWidths,
 } from "@/components/layout/app-shell-layout";
 import {
+  APP_SHORTCUT_CHORD_TIMEOUT_MS,
   isEditableShortcutTarget,
   isTerminalSurfaceTarget,
   resolveShortcutChord,
   shouldAbortTaskOnEscape,
   type PendingShortcutChord,
-  ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS,
 } from "@/components/layout/app-shell.shortcuts";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import type { RightRailPanelId } from "@/lib/right-rail-panels";
@@ -112,6 +112,7 @@ export function AppShell() {
     terminalDockHeight,
     activeEditorTabId,
     appShellMode,
+    appShortcutKeys,
     commandPaletteHiddenCommandIds,
     commandPalettePinnedCommandIds,
     commandPaletteRecentCommandIds,
@@ -158,6 +159,7 @@ export function AppShell() {
           state.layout.terminalDockHeight ?? 210,
           state.activeEditorTabId,
           state.settings.appShellMode,
+          state.settings.appShortcutKeys,
           state.settings.commandPaletteHiddenCommandIds,
           state.settings.commandPalettePinnedCommandIds,
           state.settings.commandPaletteRecentCommandIds,
@@ -505,7 +507,7 @@ export function AppShell() {
       pendingShortcutChordTimerRef.current = window.setTimeout(() => {
         pendingShortcutChordRef.current = null;
         pendingShortcutChordTimerRef.current = null;
-      }, ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS);
+      }, APP_SHORTCUT_CHORD_TIMEOUT_MS);
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -518,6 +520,7 @@ export function AppShell() {
         altKey: event.altKey,
         shiftKey: event.shiftKey,
         pendingChord: pendingShortcutChordRef.current,
+        shortcutKeys: store.settings.appShortcutKeys,
       });
 
       if (shortcutChord.nextPendingChord !== pendingShortcutChordRef.current) {
@@ -529,9 +532,101 @@ export function AppShell() {
         event.stopPropagation();
       }
 
-      if (shortcutChord.action === "toggle-zen-mode") {
-        handleToggleZenMode();
-        return;
+      switch (shortcutChord.action) {
+        case "view.toggle-zen-mode":
+          handleToggleZenMode();
+          return;
+        case "navigation.home":
+          store.clearTaskSelection();
+          return;
+        case "navigation.open-stave-muse":
+          handleOpenStaveMuse();
+          return;
+        case "view.toggle-workspace-sidebar":
+          store.setLayout({
+            patch: {
+              workspaceSidebarCollapsed:
+                !store.layout.workspaceSidebarCollapsed,
+            },
+          });
+          return;
+        case "view.toggle-changes-panel": {
+          const nextVisible = !(
+            store.layout.sidebarOverlayVisible &&
+            store.layout.sidebarOverlayTab === "changes"
+          );
+          store.setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "changes",
+            },
+          });
+          return;
+        }
+        case "view.show-explorer": {
+          const nextVisible = !(
+            store.layout.sidebarOverlayVisible &&
+            store.layout.sidebarOverlayTab === "explorer"
+          );
+          store.setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "explorer",
+            },
+          });
+          return;
+        }
+        case "view.show-information": {
+          const nextVisible = !(
+            store.layout.sidebarOverlayVisible &&
+            store.layout.sidebarOverlayTab === "information"
+          );
+          store.setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "information",
+            },
+          });
+          return;
+        }
+        case "view.show-scripts": {
+          const nextVisible = !(
+            store.layout.sidebarOverlayVisible &&
+            store.layout.sidebarOverlayTab === "scripts"
+          );
+          store.setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "scripts",
+            },
+          });
+          return;
+        }
+        case "view.show-lens": {
+          const nextVisible = !(
+            store.layout.sidebarOverlayVisible &&
+            store.layout.sidebarOverlayTab === "lens"
+          );
+          store.setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "lens",
+            },
+          });
+          return;
+        }
+        case "view.toggle-editor":
+          store.setLayout({
+            patch: { editorVisible: !store.layout.editorVisible },
+          });
+          return;
+        case "view.toggle-terminal":
+          store.setLayout({
+            patch: { terminalDocked: !store.layout.terminalDocked },
+          });
+          return;
+        default:
+          break;
       }
 
       if (shortcutChord.stopAppHandling) {
@@ -644,77 +739,6 @@ export function AppShell() {
         event.preventDefault();
         event.stopPropagation();
         store.createTask({ title: "" });
-        return;
-      }
-
-      if (!event.shiftKey && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        store.setLayout({
-          patch: {
-            workspaceSidebarCollapsed: !store.layout.workspaceSidebarCollapsed,
-          },
-        });
-        return;
-      }
-
-      if (event.shiftKey && event.key.toLowerCase() === "b") {
-        event.preventDefault();
-        const nextVisible = !(
-          store.layout.sidebarOverlayVisible &&
-          store.layout.sidebarOverlayTab === "changes"
-        );
-        store.setLayout({
-          patch: {
-            sidebarOverlayVisible: nextVisible,
-            sidebarOverlayTab: "changes",
-          },
-        });
-        return;
-      }
-
-      if (event.key.toLowerCase() === "e") {
-        event.preventDefault();
-        const nextVisible = !(
-          store.layout.sidebarOverlayVisible &&
-          store.layout.sidebarOverlayTab === "explorer"
-        );
-        store.setLayout({
-          patch: {
-            sidebarOverlayVisible: nextVisible,
-            sidebarOverlayTab: "explorer",
-          },
-        });
-        return;
-      }
-
-      if (event.key.toLowerCase() === "i") {
-        event.preventDefault();
-        const nextVisible = !(
-          store.layout.sidebarOverlayVisible &&
-          store.layout.sidebarOverlayTab === "information"
-        );
-        store.setLayout({
-          patch: {
-            sidebarOverlayVisible: nextVisible,
-            sidebarOverlayTab: "information",
-          },
-        });
-        return;
-      }
-
-      if (event.code === "Backslash" && !event.shiftKey) {
-        event.preventDefault();
-        store.setLayout({
-          patch: { editorVisible: !store.layout.editorVisible },
-        });
-        return;
-      }
-
-      if (event.key === "`") {
-        event.preventDefault();
-        store.setLayout({
-          patch: { terminalDocked: !store.layout.terminalDocked },
-        });
         return;
       }
 
@@ -1018,6 +1042,7 @@ export function AppShell() {
         zenMode,
       },
       modifierLabel,
+      appShortcutKeys,
       preferences: {
         hiddenIds: commandPaletteHiddenCommandIds,
         pinnedIds: commandPalettePinnedCommandIds,
@@ -1163,6 +1188,7 @@ export function AppShell() {
       activeWorkspacePrStatus,
       activeTurnIdsByTask,
       activeWorkspacePath,
+      appShortcutKeys,
       clearTaskSelection,
       handleContinueWorkspace,
       handleCreatePullRequest,

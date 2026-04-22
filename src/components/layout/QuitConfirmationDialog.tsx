@@ -48,7 +48,6 @@ export function QuitConfirmationDialog(props: QuitConfirmationDialogProps) {
       <DialogContent
         showCloseButton={false}
         className="max-w-[min(30rem,calc(100vw-2rem))] gap-0 overflow-hidden border border-border/70 bg-background/95 p-0 shadow-2xl supports-backdrop-filter:backdrop-blur-xl"
-        onInteractOutside={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           confirmButtonRef.current?.focus();
