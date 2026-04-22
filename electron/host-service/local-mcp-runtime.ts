@@ -32,7 +32,10 @@ import {
   buildPendingProviderTurnState,
   buildRecentTimestamp,
 } from "../../src/store/chat-state-helpers";
-import { applyApprovalState, applyUserInputState } from "../../src/store/editor.utils";
+import {
+  applyApprovalState,
+  applyUserInputState,
+} from "../../src/store/editor.utils";
 import {
   buildProjectDefaultWorkspaceId,
   buildImportedWorktreeWorkspaceId,
@@ -46,6 +49,7 @@ import {
   resolveProjectNameFromPath,
   resolveProjectWorkspaceInitCommand,
   resolveProjectWorkspaceRootNodeModulesSymlinkPreference,
+  resolveWorkspaceRemoteBaseBranchTarget,
   sanitizeBranchName,
   summarizeTerminalCommandDetail,
   summarizeWorkspaceInitCommand,
@@ -176,7 +180,8 @@ async function assertDirectoryExists(projectPath: string) {
 async function detectDefaultBranch(projectPath: string) {
   const branchResult = await runCommand({
     cwd: projectPath,
-    command: "git symbolic-ref --short refs/remotes/origin/HEAD || git symbolic-ref --short HEAD || echo main",
+    command:
+      "git symbolic-ref --short refs/remotes/origin/HEAD || git symbolic-ref --short HEAD || echo main",
   });
   const branchLine = (branchResult.stdout || "")
     .split("\n")
@@ -201,7 +206,9 @@ function createEmptyWorkspaceSnapshot() {
   });
 }
 
-function toWorkspaceList(project: RecentProjectState): RegisteredWorkspaceInfo[] {
+function toWorkspaceList(
+  project: RecentProjectState,
+): RegisteredWorkspaceInfo[] {
   return project.workspaces.map((workspace) => ({
     id: workspace.id,
     name: workspace.name,
@@ -242,7 +249,8 @@ function queueWorkspaceSessionPersist(args: {
   workspaceName: string;
   session: WorkspaceSessionState;
 }) {
-  const previous = workspacePersistChainById.get(args.workspaceId) ?? Promise.resolve();
+  const previous =
+    workspacePersistChainById.get(args.workspaceId) ?? Promise.resolve();
   let tracked: Promise<void>;
   tracked = previous
     .catch(() => undefined)
@@ -278,8 +286,13 @@ async function saveNormalizedProjects(projects: RecentProjectState[]) {
   });
 }
 
-function findProjectByPath(projects: RecentProjectState[], projectPath: string) {
-  return projects.find((project) => project.projectPath === projectPath) ?? null;
+function findProjectByPath(
+  projects: RecentProjectState[],
+  projectPath: string,
+) {
+  return (
+    projects.find((project) => project.projectPath === projectPath) ?? null
+  );
 }
 
 function findWorkspaceRegistration(args: {
@@ -287,15 +300,18 @@ function findWorkspaceRegistration(args: {
   workspaceId: string;
 }) {
   for (const project of args.projects) {
-    const workspace = project.workspaces.find((item) => item.id === args.workspaceId) ?? null;
+    const workspace =
+      project.workspaces.find((item) => item.id === args.workspaceId) ?? null;
     if (!workspace) {
       continue;
     }
     return {
       project,
       workspace,
-      workspacePath: project.workspacePathById[workspace.id] ?? project.projectPath,
-      branch: project.workspaceBranchById[workspace.id] ?? project.defaultBranch,
+      workspacePath:
+        project.workspacePathById[workspace.id] ?? project.projectPath,
+      branch:
+        project.workspaceBranchById[workspace.id] ?? project.defaultBranch,
     };
   }
   return null;
@@ -310,9 +326,11 @@ async function ensureProjectRegistryEntry(args: {
   await assertDirectoryExists(projectPath);
   const resolvedProjectName = normalizeProjectDisplayName({
     projectPath,
-    projectName: args.projectName?.trim() || resolveProjectNameFromPath({ projectPath }),
+    projectName:
+      args.projectName?.trim() || resolveProjectNameFromPath({ projectPath }),
   });
-  const defaultBranch = args.defaultBranch?.trim() || await detectDefaultBranch(projectPath);
+  const defaultBranch =
+    args.defaultBranch?.trim() || (await detectDefaultBranch(projectPath));
   const now = new Date().toISOString();
 
   const { store, projects } = await loadNormalizedProjects();
@@ -324,7 +342,9 @@ async function ensureProjectRegistryEntry(args: {
         workspaceDefaultById: existingProject.workspaceDefaultById,
       })
     : buildProjectDefaultWorkspaceId({ projectPath });
-  const existingSnapshot = store.loadWorkspaceSnapshot({ workspaceId: defaultWorkspaceId });
+  const existingSnapshot = store.loadWorkspaceSnapshot({
+    workspaceId: defaultWorkspaceId,
+  });
 
   if (!existingSnapshot) {
     store.upsertWorkspace({
@@ -340,29 +360,49 @@ async function ensureProjectRegistryEntry(args: {
         projectName: resolvedProjectName,
         defaultBranch,
         lastOpenedAt: now,
-        activeWorkspaceId: existingProject.activeWorkspaceId || defaultWorkspaceId,
+        activeWorkspaceId:
+          existingProject.activeWorkspaceId || defaultWorkspaceId,
         workspaceBranchById: {
           ...existingProject.workspaceBranchById,
-          [defaultWorkspaceId]: existingProject.workspaceBranchById[defaultWorkspaceId] || defaultBranch,
+          [defaultWorkspaceId]:
+            existingProject.workspaceBranchById[defaultWorkspaceId] ||
+            defaultBranch,
         },
         workspacePathById: {
           ...existingProject.workspacePathById,
-          [defaultWorkspaceId]: existingProject.workspacePathById[defaultWorkspaceId] || projectPath,
+          [defaultWorkspaceId]:
+            existingProject.workspacePathById[defaultWorkspaceId] ||
+            projectPath,
         },
         workspaceDefaultById: {
           ...existingProject.workspaceDefaultById,
           [defaultWorkspaceId]: true,
         },
-        workspaces: existingProject.workspaces.some((workspace) => workspace.id === defaultWorkspaceId)
+        workspaces: existingProject.workspaces.some(
+          (workspace) => workspace.id === defaultWorkspaceId,
+        )
           ? existingProject.workspaces
-          : [{ id: defaultWorkspaceId, name: defaultWorkspaceName, updatedAt: now }, ...existingProject.workspaces],
+          : [
+              {
+                id: defaultWorkspaceId,
+                name: defaultWorkspaceName,
+                updatedAt: now,
+              },
+              ...existingProject.workspaces,
+            ],
       }
     : {
         projectPath,
         projectName: resolvedProjectName,
         lastOpenedAt: now,
         defaultBranch,
-        workspaces: [{ id: defaultWorkspaceId, name: defaultWorkspaceName, updatedAt: now }],
+        workspaces: [
+          {
+            id: defaultWorkspaceId,
+            name: defaultWorkspaceName,
+            updatedAt: now,
+          },
+        ],
         activeWorkspaceId: defaultWorkspaceId,
         workspaceBranchById: { [defaultWorkspaceId]: defaultBranch },
         workspacePathById: { [defaultWorkspaceId]: projectPath },
@@ -400,7 +440,10 @@ async function loadWorkspaceSession(workspaceId: string) {
   if (!snapshot) {
     throw new Error(`Workspace not found: ${workspaceId}`);
   }
-  const latestTurns = store.listActiveTurnsForWorkspace({ workspaceId, limit: 200 });
+  const latestTurns = store.listActiveTurnsForWorkspace({
+    workspaceId,
+    limit: 200,
+  });
   const session = buildWorkspaceSessionState({
     snapshot: snapshot as never,
     latestTurns: latestTurns as never,
@@ -408,7 +451,10 @@ async function loadWorkspaceSession(workspaceId: string) {
   return cacheWorkspaceSession(workspaceId, session);
 }
 
-function cacheWorkspaceSession(workspaceId: string, session: WorkspaceSessionState) {
+function cacheWorkspaceSession(
+  workspaceId: string,
+  session: WorkspaceSessionState,
+) {
   workspaceSessionCacheById.delete(workspaceId);
   workspaceSessionCacheById.set(workspaceId, session);
   while (workspaceSessionCacheById.size > WORKSPACE_SESSION_CACHE_LIMIT) {
@@ -440,14 +486,18 @@ export async function cleanupLocalMcpRuntime() {
   workspaceSessionCacheById.clear();
 }
 
-function emitWorkspaceInformationUpdate(payload: WorkspaceInformationMutationResult) {
+function emitWorkspaceInformationUpdate(
+  payload: WorkspaceInformationMutationResult,
+) {
   localMcpEventListener?.({
     type: "workspace-information-updated",
     payload,
   });
 }
 
-function normalizeWorkspaceResourceKind(value: string): WorkspaceInformationResourceKind {
+function normalizeWorkspaceResourceKind(
+  value: string,
+): WorkspaceInformationResourceKind {
   switch (value.trim()) {
     case "jira":
     case "pull_request":
@@ -475,7 +525,9 @@ function normalizeWorkspaceFieldType(value: string): WorkspaceInfoFieldType {
   }
 }
 
-function normalizeLinkedPullRequestStatus(value?: string): WorkspaceLinkedPrStatus {
+function normalizeLinkedPullRequestStatus(
+  value?: string,
+): WorkspaceLinkedPrStatus {
   switch (value?.trim()) {
     case "open":
     case "review":
@@ -544,7 +596,9 @@ function coerceWorkspaceCustomFieldValue(args: {
     case "single_select": {
       const nextValue = value == null ? "" : String(value).trim();
       if (nextValue && !field.options.includes(nextValue)) {
-        throw new Error(`Value "${nextValue}" is not a valid option for custom field ${field.id}.`);
+        throw new Error(
+          `Value "${nextValue}" is not a valid option for custom field ${field.id}.`,
+        );
       }
       return {
         ...field,
@@ -592,9 +646,7 @@ async function updateWorkspaceInformationState(args: {
   } satisfies WorkspaceInformationMutationResult;
 }
 
-export async function getWorkspaceInformation(args: {
-  workspaceId: string;
-}) {
+export async function getWorkspaceInformation(args: { workspaceId: string }) {
   const session = await loadWorkspaceSession(args.workspaceId);
   return {
     workspaceId: args.workspaceId,
@@ -627,16 +679,12 @@ export async function appendWorkspaceNotes(args: {
     workspaceId: args.workspaceId,
     updater: (current) => ({
       ...current,
-      notes: current.notes.trim()
-        ? `${current.notes.trim()}\n${text}`
-        : text,
+      notes: current.notes.trim() ? `${current.notes.trim()}\n${text}` : text,
     }),
   });
 }
 
-export async function clearWorkspaceNotes(args: {
-  workspaceId: string;
-}) {
+export async function clearWorkspaceNotes(args: { workspaceId: string }) {
   return updateWorkspaceInformationState({
     workspaceId: args.workspaceId,
     updater: (current) => ({
@@ -688,7 +736,9 @@ export async function updateWorkspaceTodo(args: {
         return {
           ...todo,
           ...(args.text !== undefined ? { text: args.text.trim() } : {}),
-          ...(args.completed !== undefined ? { completed: args.completed } : {}),
+          ...(args.completed !== undefined
+            ? { completed: args.completed }
+            : {}),
         };
       });
       if (!found) {
@@ -815,7 +865,9 @@ export async function removeWorkspaceResource(args: {
     updater: (current) => {
       switch (kind) {
         case "jira": {
-          const jiraIssues = current.jiraIssues.filter((item) => item.id !== args.itemId);
+          const jiraIssues = current.jiraIssues.filter(
+            (item) => item.id !== args.itemId,
+          );
           if (jiraIssues.length === current.jiraIssues.length) {
             throw new Error(`Workspace resource not found: ${args.itemId}`);
           }
@@ -825,7 +877,9 @@ export async function removeWorkspaceResource(args: {
           };
         }
         case "pull_request": {
-          const linkedPullRequests = current.linkedPullRequests.filter((item) => item.id !== args.itemId);
+          const linkedPullRequests = current.linkedPullRequests.filter(
+            (item) => item.id !== args.itemId,
+          );
           if (linkedPullRequests.length === current.linkedPullRequests.length) {
             throw new Error(`Workspace resource not found: ${args.itemId}`);
           }
@@ -835,7 +889,9 @@ export async function removeWorkspaceResource(args: {
           };
         }
         case "confluence": {
-          const confluencePages = current.confluencePages.filter((item) => item.id !== args.itemId);
+          const confluencePages = current.confluencePages.filter(
+            (item) => item.id !== args.itemId,
+          );
           if (confluencePages.length === current.confluencePages.length) {
             throw new Error(`Workspace resource not found: ${args.itemId}`);
           }
@@ -845,7 +901,9 @@ export async function removeWorkspaceResource(args: {
           };
         }
         case "figma": {
-          const figmaResources = current.figmaResources.filter((item) => item.id !== args.itemId);
+          const figmaResources = current.figmaResources.filter(
+            (item) => item.id !== args.itemId,
+          );
           if (figmaResources.length === current.figmaResources.length) {
             throw new Error(`Workspace resource not found: ${args.itemId}`);
           }
@@ -855,7 +913,9 @@ export async function removeWorkspaceResource(args: {
           };
         }
         case "slack": {
-          const slackThreads = current.slackThreads.filter((item) => item.id !== args.itemId);
+          const slackThreads = current.slackThreads.filter(
+            (item) => item.id !== args.itemId,
+          );
           if (slackThreads.length === current.slackThreads.length) {
             throw new Error(`Workspace resource not found: ${args.itemId}`);
           }
@@ -919,8 +979,14 @@ export async function setWorkspaceCustomField(args: {
   label?: string;
   options?: string[];
 }) {
-  if (args.value === undefined && args.label === undefined && args.options === undefined) {
-    throw new Error("Workspace custom field update requires value, label, or options.");
+  if (
+    args.value === undefined &&
+    args.label === undefined &&
+    args.options === undefined
+  ) {
+    throw new Error(
+      "Workspace custom field update requires value, label, or options.",
+    );
   }
   return updateWorkspaceInformationState({
     workspaceId: args.workspaceId,
@@ -974,7 +1040,9 @@ export async function removeWorkspaceCustomField(args: {
   return updateWorkspaceInformationState({
     workspaceId: args.workspaceId,
     updater: (current) => {
-      const customFields = current.customFields.filter((field) => field.id !== args.fieldId);
+      const customFields = current.customFields.filter(
+        (field) => field.id !== args.fieldId,
+      );
       if (customFields.length === current.customFields.length) {
         throw new Error(`Workspace custom field not found: ${args.fieldId}`);
       }
@@ -999,8 +1067,13 @@ export async function addWorkspaceJiraIssue(args: {
     workspaceId: args.workspaceId,
     kind: "jira",
     url: normalizeWorkspaceInfoString(args.url),
-    issueKey: normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "",
-    title: normalizeWorkspaceInfoString(args.title) || normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "Jira issue",
+    issueKey:
+      normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "",
+    title:
+      normalizeWorkspaceInfoString(args.title) ||
+      normalizeWorkspaceInfoString(args.issueKey) ||
+      parsed?.issueKey ||
+      "Jira issue",
     status: normalizeWorkspaceInfoString(args.status),
     note: normalizeWorkspaceInfoString(args.note),
   });
@@ -1023,13 +1096,19 @@ export async function addWorkspaceConfluencePage(args: {
     workspaceId: args.workspaceId,
     kind: "confluence",
     url: normalizeWorkspaceInfoString(args.url),
-    title: normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.spaceKey || "Confluence page",
-    spaceKey: normalizeWorkspaceInfoString(args.spaceKey) || parsed?.spaceKey || "",
+    title:
+      normalizeWorkspaceInfoString(args.title) ||
+      parsed?.title ||
+      parsed?.spaceKey ||
+      "Confluence page",
+    spaceKey:
+      normalizeWorkspaceInfoString(args.spaceKey) || parsed?.spaceKey || "",
     note: normalizeWorkspaceInfoString(args.note),
   });
   return {
     workspaceId: workspaceInformation.workspaceId,
-    added: workspaceInformation.workspaceInformation.confluencePages.at(-1) ?? null,
+    added:
+      workspaceInformation.workspaceInformation.confluencePages.at(-1) ?? null,
     workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
@@ -1046,13 +1125,18 @@ export async function addWorkspaceFigmaResource(args: {
     workspaceId: args.workspaceId,
     kind: "figma",
     url: normalizeWorkspaceInfoString(args.url),
-    title: normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.fileKey || "Figma resource",
+    title:
+      normalizeWorkspaceInfoString(args.title) ||
+      parsed?.title ||
+      parsed?.fileKey ||
+      "Figma resource",
     nodeId: normalizeWorkspaceInfoString(args.nodeId) || parsed?.nodeId || "",
     note: normalizeWorkspaceInfoString(args.note),
   });
   return {
     workspaceId: workspaceInformation.workspaceId,
-    added: workspaceInformation.workspaceInformation.figmaResources.at(-1) ?? null,
+    added:
+      workspaceInformation.workspaceInformation.figmaResources.at(-1) ?? null,
     workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
@@ -1068,21 +1152,25 @@ export async function addWorkspaceSlackThread(args: {
     workspaceId: args.workspaceId,
     kind: "slack",
     url: normalizeWorkspaceInfoString(args.url),
-    channelName: normalizeWorkspaceInfoString(args.channelName) || parsed?.channelId || "",
+    channelName:
+      normalizeWorkspaceInfoString(args.channelName) || parsed?.channelId || "",
     note: normalizeWorkspaceInfoString(args.note),
   });
   return {
     workspaceId: workspaceInformation.workspaceId,
-    added: workspaceInformation.workspaceInformation.slackThreads.at(-1) ?? null,
+    added:
+      workspaceInformation.workspaceInformation.slackThreads.at(-1) ?? null,
     workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
 function buildTaskTitleFromPrompt(prompt: string) {
-  return prompt
-    .split("\n")
-    .map((line) => line.trim())
-    .find(Boolean)
-    ?.slice(0, 48) || "New Task";
+  return (
+    prompt
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean)
+      ?.slice(0, 48) || "New Task"
+  );
 }
 
 function findPendingApprovals(messages: ChatMessage[]) {
@@ -1160,7 +1248,8 @@ async function persistApprovalNotification(args: {
     projects,
     workspaceId: args.workspaceId,
   });
-  const taskTitle = args.session.tasks.find((task) => task.id === args.taskId)?.title ?? "Task";
+  const taskTitle =
+    args.session.tasks.find((task) => task.id === args.taskId)?.title ?? "Task";
   const location = findPendingApprovalMessageByRequestId({
     messages: args.session.messagesByTask[args.taskId] ?? [],
     requestId: args.event.requestId,
@@ -1202,7 +1291,11 @@ async function persistTurnCompletedNotification(args: {
   event: Extract<NormalizedProviderEvent, { type: "done" }>;
   session: WorkspaceSessionState;
 }) {
-  if (workspaceHasActiveTurns({ activeTurnIdsByTask: args.session.activeTurnIdsByTask })) {
+  if (
+    workspaceHasActiveTurns({
+      activeTurnIdsByTask: args.session.activeTurnIdsByTask,
+    })
+  ) {
     return;
   }
 
@@ -1211,7 +1304,8 @@ async function persistTurnCompletedNotification(args: {
     projects,
     workspaceId: args.workspaceId,
   });
-  const taskTitle = args.session.tasks.find((task) => task.id === args.taskId)?.title ?? "Task";
+  const taskTitle =
+    args.session.tasks.find((task) => task.id === args.taskId)?.title ?? "Task";
 
   await persistNotification({
     id: randomUUID(),
@@ -1304,6 +1398,7 @@ export async function createWorkspace(args: {
   name: string;
   mode: "branch" | "clean";
   fromBranch?: string;
+  fromBranchKind?: "local" | "remote";
   initCommand?: string;
   useRootNodeModulesSymlink?: boolean;
 }) {
@@ -1322,11 +1417,14 @@ export async function createWorkspace(args: {
     throw new Error("Workspace branch name is invalid.");
   }
 
-  const existingWorkspace = toWorkspaceList(project).find((workspace) => (
-    workspace.branch === branchName
-    || workspace.name === branchName
-    || workspace.path === `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName, unique: true })}`
-  )) ?? null;
+  const existingWorkspace =
+    toWorkspaceList(project).find(
+      (workspace) =>
+        workspace.branch === branchName ||
+        workspace.name === branchName ||
+        workspace.path ===
+          `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName, unique: true })}`,
+    ) ?? null;
   if (existingWorkspace) {
     return {
       workspaceId: existingWorkspace.id,
@@ -1345,21 +1443,75 @@ export async function createWorkspace(args: {
     projectPath,
     worktreePath: workspacePath,
   });
-  const baseBranch = args.fromBranch?.trim() || project.defaultBranch || ensured.defaultBranch || "main";
+  let baseBranch =
+    args.fromBranch?.trim() ||
+    project.defaultBranch ||
+    ensured.defaultBranch ||
+    "main";
   const initCommand = normalizeWorkspaceInitCommand({
-    value: args.initCommand ?? resolveProjectWorkspaceInitCommand({
-      projectPath,
-      recentProjects: [project],
-    }),
-  });
-  const useRootNodeModulesSymlink = args.useRootNodeModulesSymlink === undefined
-    ? resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+    value:
+      args.initCommand ??
+      resolveProjectWorkspaceInitCommand({
         projectPath,
         recentProjects: [project],
-      })
-    : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-        value: args.useRootNodeModulesSymlink,
+      }),
+  });
+  const useRootNodeModulesSymlink =
+    args.useRootNodeModulesSymlink === undefined
+      ? resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+          projectPath,
+          recentProjects: [project],
+        })
+      : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+          value: args.useRootNodeModulesSymlink,
+        });
+  const notices: Array<{ level: "success" | "warning"; message: string }> = [];
+
+  const remoteTarget =
+    args.mode === "branch"
+      ? await resolveWorkspaceRemoteBaseBranchTarget({
+          baseBranch,
+          fromBranchKind: args.fromBranchKind,
+          verifyRef: async (ref) =>
+            (
+              await runCommand({
+                cwd: projectPath,
+                command: `git show-ref --verify --quiet ${JSON.stringify(ref)}`,
+              })
+            ).ok,
+        })
+      : null;
+  if (remoteTarget) {
+    const fetchResult = await runCommand({
+      cwd: projectPath,
+      command: `git fetch ${remoteTarget.remoteName} --prune`,
+    });
+    if (!fetchResult.ok) {
+      const localBranchProbe = await runCommand({
+        cwd: projectPath,
+        command: `git show-ref --verify --quiet ${JSON.stringify(`refs/heads/${remoteTarget.localBranch}`)}`,
       });
+      baseBranch = localBranchProbe.ok ? remoteTarget.localBranch : baseBranch;
+      notices.push({
+        level: "warning",
+        message: localBranchProbe.ok
+          ? `Could not refresh \`${args.fromBranch}\`; created the workspace from local \`${remoteTarget.localBranch}\` instead. ${summarizeTerminalCommandDetail(
+              {
+                stderr: fetchResult.stderr,
+                stdout: fetchResult.stdout,
+                fallback: "git fetch failed.",
+              },
+            )}`
+          : `Could not refresh \`${args.fromBranch}\`; created the workspace from the cached remote-tracking ref instead. ${summarizeTerminalCommandDetail(
+              {
+                stderr: fetchResult.stderr,
+                stdout: fetchResult.stdout,
+                fallback: "git fetch failed.",
+              },
+            )}`,
+      });
+    }
+  }
 
   await runCommand({
     cwd: projectPath,
@@ -1367,9 +1519,10 @@ export async function createWorkspace(args: {
   });
   const addResult = await runCommand({
     cwd: projectPath,
-    command: args.mode === "clean"
-      ? `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)}`
-      : `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)} ${JSON.stringify(baseBranch)}`,
+    command:
+      args.mode === "clean"
+        ? `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)}`
+        : `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)} ${JSON.stringify(baseBranch)}`,
   });
   if (!addResult.ok) {
     const fallbackResult = await runCommand({
@@ -1377,11 +1530,15 @@ export async function createWorkspace(args: {
       command: `git worktree add ${JSON.stringify(workspacePath)} ${JSON.stringify(branchName)}`,
     });
     if (!fallbackResult.ok) {
-      throw new Error((fallbackResult.stderr || addResult.stderr || "Failed to create git worktree.").trim());
+      throw new Error(
+        (
+          fallbackResult.stderr ||
+          addResult.stderr ||
+          "Failed to create git worktree."
+        ).trim(),
+      );
     }
   }
-
-  const notices: Array<{ level: "success" | "warning"; message: string }> = [];
 
   if (useRootNodeModulesSymlink) {
     const linkResult = await runCommand({
@@ -1391,16 +1548,19 @@ export async function createWorkspace(args: {
     if (linkResult.ok) {
       notices.push({
         level: "success",
-        message: "Linked `node_modules` from the repository root into the new workspace.",
+        message:
+          "Linked `node_modules` from the repository root into the new workspace.",
       });
     } else {
       notices.push({
         level: "warning",
-        message: `Linking the shared root \`node_modules\` failed. ${summarizeTerminalCommandDetail({
-          stderr: linkResult.stderr,
-          stdout: linkResult.stdout,
-          fallback: "Command failed.",
-        })}`,
+        message: `Linking the shared root \`node_modules\` failed. ${summarizeTerminalCommandDetail(
+          {
+            stderr: linkResult.stderr,
+            stdout: linkResult.stdout,
+            fallback: "Command failed.",
+          },
+        )}`,
       });
     }
   }
@@ -1410,7 +1570,9 @@ export async function createWorkspace(args: {
       cwd: workspacePath,
       command: initCommand,
     });
-    const summarizedCommand = summarizeWorkspaceInitCommand({ command: initCommand });
+    const summarizedCommand = summarizeWorkspaceInitCommand({
+      command: initCommand,
+    });
     if (initResult.ok) {
       notices.push({
         level: "success",
@@ -1419,11 +1581,13 @@ export async function createWorkspace(args: {
     } else {
       notices.push({
         level: "warning",
-        message: `The post-create command failed: ${summarizedCommand}. ${summarizeTerminalCommandDetail({
-          stderr: initResult.stderr,
-          stdout: initResult.stdout,
-          fallback: "Command failed.",
-        })}`,
+        message: `The post-create command failed: ${summarizedCommand}. ${summarizeTerminalCommandDetail(
+          {
+            stderr: initResult.stderr,
+            stdout: initResult.stdout,
+            fallback: "Command failed.",
+          },
+        )}`,
       });
     }
   }
@@ -1435,14 +1599,20 @@ export async function createWorkspace(args: {
     name: branchName,
     snapshot: snapshot as never,
   });
-  cacheWorkspaceSession(workspaceId, buildWorkspaceSessionState({ snapshot: snapshot as never }));
+  cacheWorkspaceSession(
+    workspaceId,
+    buildWorkspaceSessionState({ snapshot: snapshot as never }),
+  );
 
   const now = new Date().toISOString();
   const nextProject: RecentProjectState = {
     ...project,
     lastOpenedAt: now,
     activeWorkspaceId: workspaceId,
-    workspaces: [...project.workspaces, { id: workspaceId, name: branchName, updatedAt: now }],
+    workspaces: [
+      ...project.workspaces,
+      { id: workspaceId, name: branchName, updatedAt: now },
+    ],
     workspaceBranchById: {
       ...project.workspaceBranchById,
       [workspaceId]: branchName,
@@ -1457,10 +1627,12 @@ export async function createWorkspace(args: {
     },
   };
   const { projects } = await loadNormalizedProjects();
-  await saveNormalizedProjects(upsertRecentProjectState({
-    projects,
-    project: nextProject,
-  }));
+  await saveNormalizedProjects(
+    upsertRecentProjectState({
+      projects,
+      project: nextProject,
+    }),
+  );
 
   const notice = buildWorkspaceCreationNotice({ notices });
   return {
@@ -1495,9 +1667,11 @@ export async function runTask(args: {
   const workspaceName = registration.workspace.name;
   let session = await loadWorkspaceSession(args.workspaceId);
   const provider = args.provider ?? "stave";
-  const model = args.runtimeOptions?.model?.trim() || getDefaultModelForProvider({
-    providerId: provider,
-  });
+  const model =
+    args.runtimeOptions?.model?.trim() ||
+    getDefaultModelForProvider({
+      providerId: provider,
+    });
 
   let task = findWorkspaceTaskOrThrow({
     tasks: session.tasks,
@@ -1529,7 +1703,10 @@ export async function runTask(args: {
         [task.id]: false,
       },
     });
-  } else if (task.controlMode !== "managed" || task.controlOwner !== "external") {
+  } else if (
+    task.controlMode !== "managed" ||
+    task.controlOwner !== "external"
+  ) {
     task = {
       ...task,
       controlMode: "managed",
@@ -1538,7 +1715,7 @@ export async function runTask(args: {
     } satisfies Task;
     session = cacheWorkspaceSession(args.workspaceId, {
       ...session,
-      tasks: session.tasks.map((item) => item.id === task!.id ? task! : item),
+      tasks: session.tasks.map((item) => (item.id === task!.id ? task! : item)),
     });
   }
 
@@ -1608,42 +1785,46 @@ export async function runTask(args: {
     providerId: provider,
   });
 
-  const started = providerRuntime.startTurnStream({
-    turnId,
-    providerId: provider,
-    prompt: args.prompt,
-    conversation,
-    taskId: task.id,
-    workspaceId: args.workspaceId,
-    cwd: workspacePath,
-    runtimeOptions: {
-      ...args.runtimeOptions,
-      model,
+  const started = providerRuntime.startTurnStream(
+    {
+      turnId,
+      providerId: provider,
+      prompt: args.prompt,
+      conversation,
+      taskId: task.id,
+      workspaceId: args.workspaceId,
+      cwd: workspacePath,
+      runtimeOptions: {
+        ...args.runtimeOptions,
+        model,
+      },
     },
-  }, {
-    onEvent: (event) => {
-      sequence += 1;
-      void workspaceProviderEventQueue.enqueue(
-        args.workspaceId,
-        () => handleProviderEvent({
-          workspaceId: args.workspaceId,
-          workspaceName,
-          taskId: task.id,
-          provider,
-          model,
-          turnId,
-          event,
-        }),
-      ).catch((error) => {
-        console.error("[stave-mcp] failed to apply provider event", error, {
-          workspaceId: args.workspaceId,
-          taskId: task.id,
-          turnId,
-          eventType: event.type,
-        });
-      });
+    {
+      onEvent: (event) => {
+        sequence += 1;
+        void workspaceProviderEventQueue
+          .enqueue(args.workspaceId, () =>
+            handleProviderEvent({
+              workspaceId: args.workspaceId,
+              workspaceName,
+              taskId: task.id,
+              provider,
+              model,
+              turnId,
+              event,
+            }),
+          )
+          .catch((error) => {
+            console.error("[stave-mcp] failed to apply provider event", error, {
+              workspaceId: args.workspaceId,
+              taskId: task.id,
+              turnId,
+              eventType: event.type,
+            });
+          });
+      },
     },
-  });
+  );
 
   if (!started.ok) {
     throw new Error("Failed to start provider turn.");
@@ -1670,16 +1851,20 @@ export async function getTaskStatus(args: {
   }
 
   const store = ensureHostServicePersistenceReady();
-  const latestTurn = store.listTurns({
-    workspaceId: args.workspaceId,
-    taskId: args.taskId,
-    limit: 1,
-  })[0] ?? null;
+  const latestTurn =
+    store.listTurns({
+      workspaceId: args.workspaceId,
+      taskId: args.taskId,
+      limit: 1,
+    })[0] ?? null;
   const messages = session.messagesByTask[args.taskId] ?? [];
-  const latestAssistantText = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant" && message.content.trim().length > 0)
-    ?.content ?? null;
+  const latestAssistantText =
+    [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === "assistant" && message.content.trim().length > 0,
+      )?.content ?? null;
 
   return {
     workspaceId: args.workspaceId,

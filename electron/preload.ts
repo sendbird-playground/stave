@@ -1062,7 +1062,7 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("scm:diff", args),
     getHistory: (args: { cwd?: string; limit?: number }) =>
       ipcRenderer.invoke("scm:history", args),
-    listBranches: (args: { cwd?: string }) =>
+    listBranches: (args: { cwd?: string; refreshRemote?: boolean }) =>
       ipcRenderer.invoke("scm:list-branches", args),
     createBranch: (args: { name: string; cwd?: string; from?: string }) =>
       ipcRenderer.invoke("scm:create-branch", args),

@@ -62,6 +62,7 @@ import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import {
   Badge,
+  BorderBeam,
   Button,
   Tooltip,
   TooltipContent,
@@ -482,6 +483,28 @@ const WorkspaceRespondingCountBadge = memo(
     );
   },
 );
+
+/**
+ * Render a decorative animated beam around the workspace row when any task in
+ * the workspace is currently streaming and the user has opted into the Border
+ * Beam motion setting. The parent row must be `position: relative`.
+ */
+const WorkspaceBorderBeam = memo(function WorkspaceBorderBeam(args: {
+  workspaceId: string;
+}) {
+  const { respondingTaskCount } = useWorkspaceSidebarActivityState(
+    args.workspaceId,
+  );
+  const borderBeamEnabled = useAppStore(
+    (state) => state.settings.borderBeamEnabled,
+  );
+
+  if (!borderBeamEnabled || respondingTaskCount === 0) {
+    return null;
+  }
+
+  return <BorderBeam borderWidth={1} duration={5} />;
+});
 
 const IS_MAC =
   typeof window !== "undefined" && window.api?.platform === "darwin";
@@ -1359,13 +1382,18 @@ export function ProjectWorkspaceSidebar(args: {
                                                     }) => (
                                                       <div
                                                         className={cn(
-                                                          "group/workspace-row flex items-center gap-1 rounded-lg border border-transparent bg-transparent transition-[background-color,border-color,box-shadow,color] hover:border-sidebar-border/45 hover:bg-background/20 hover:text-foreground hover:shadow-sm",
+                                                          "group/workspace-row relative flex items-center gap-1 rounded-lg border border-transparent bg-transparent transition-[background-color,border-color,box-shadow,color] hover:border-sidebar-border/45 hover:bg-background/20 hover:text-foreground hover:shadow-sm",
                                                           isActive &&
                                                             "border-sidebar-border/60 bg-background/24 text-foreground ring-1 ring-primary/20 shadow-sm backdrop-blur-sm",
                                                           isDragging &&
                                                             "border-sidebar-border/45 bg-background/22 shadow-sm",
                                                         )}
                                                       >
+                                                        <WorkspaceBorderBeam
+                                                          workspaceId={
+                                                            workspace.id
+                                                          }
+                                                        />
                                                         {dragHandle}
                                                         <WorkspaceHoverPreviewTooltip
                                                           workspaceId={

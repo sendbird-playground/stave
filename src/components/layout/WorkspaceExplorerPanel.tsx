@@ -172,30 +172,32 @@ function ExplorerSearchPanel(props: {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="relative px-2 pb-1">
-        <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-              void performSearch(query);
-            }
-          }}
-          className="h-8 rounded-sm border-border/80 bg-background pl-7 pr-7 text-sm"
-          placeholder="Search in files..."
-          autoFocus
-        />
-        {query ? (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        ) : null}
+      <div className="px-2 pb-1">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+                void performSearch(query);
+              }
+            }}
+            className="h-8 rounded-sm border-border/80 bg-background pl-7 pr-7 text-sm"
+            placeholder="Search in files..."
+            autoFocus
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {isSearching ? (
