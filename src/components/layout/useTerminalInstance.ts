@@ -269,9 +269,9 @@ export async function restoreVisibleTerminalViewport(args: {
     (proposed.cols !== currentCols || proposed.rows !== currentRows);
 
   if (geometryChanged && proposed) {
-    // Match mux's PTY-first resize contract: if the hidden surface's measured
-    // geometry changed, hand that off to the backend resize path and let the
-    // frontend resize only happen after the PTY has acknowledged it.
+    // PTY-first resize contract: if the hidden surface's measured geometry
+    // changed, hand that off to the backend resize path and let the frontend
+    // resize only happen after the PTY has acknowledged it.
     await args.notifyResize?.(proposed.cols, proposed.rows);
     return;
   }
@@ -717,8 +717,8 @@ export function useTerminalInstance(
 
       // Gate ResizeObserver through requestAnimationFrame so resize-heavy
       // interactions emit at most one measure + resize request per frame.
-      // The local surface still follows the backend-success path, matching
-      // mux's PTY-first contract and avoiding stale WebGL geometry churn.
+      // The local surface still follows the backend-success path, preserving
+      // the PTY-first contract and avoiding stale WebGL geometry churn.
       let resizeRafPending = false;
       const resizeObserver =
         typeof ResizeObserver !== "undefined"

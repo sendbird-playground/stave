@@ -1,7 +1,5 @@
 # CLI Session Architecture Review
 
-> Compared against: **superset** and **t3code**
->
 > Reviewed: 2026-04-12 — commits `61b3a4b..HEAD` (xterm.js rewrite)
 
 ## Current Architecture
@@ -53,42 +51,16 @@ resumeSessionStream({ ... })    → stream activated (push events flow)
 
 ---
 
-## Reference Comparison
+## Design Choices Worth Noting
 
-### Superset
-
-- **9 hooks** (~3,400 lines): lifecycle, connection, stream, restore, refs, modes.
-- **2-step lifecycle**: `createOrAttach(paneId)` — server decides create vs reattach.
-- **Client-side event gate**: `isStreamReadyRef` + `pendingEventsRef` queue. Events
-  arriving before restoration are buffered client-side and flushed in order.
-- **Snapshot format**: ANSI + `rehydrateSequences` + `modes` (alternate screen,
-  bracketed paste). Full TUI state recovery.
-- **WebGL renderer** with DOM fallback.
-- **`onRender` first-paint**: Waits for xterm `onRender` event (250 ms fallback) before
-  applying snapshot — guarantees the renderer is ready.
-- **Theme**: MutationObserver on `<html>` for real-time sync.
-
-### t3code
-
-- **1 component** (~1,300 lines) + Zustand store (~850 lines).
-- **1-step lifecycle**: `terminal.open()` = create + attach + stream.
-- **Client-side event buffer**: Zustand circular buffer (200 entries). Events after
-  snapshot timestamp are replayed.
-- **Snapshot format**: `history` (plain ANSI). `\u001bc` clear + replay.
-- **Theme**: MutationObserver on `<html>`.
-
----
-
-## Where Stave Excels
-
-1. **`attachmentId` concurrency control** — Neither reference project has this. Prevents
-   stale detach from tearing down a newer attachment (critical for rapid workspace
-   switching).
-2. **Server-side headless mirror** — Eliminates the need for client-side mode tracking
-   (Superset's `useTerminalModes`, rehydrate sequences). The server serializes full
-   terminal state.
-3. **`writeErrorCount` tracking** — Detects renderer corruption and surfaces "Restart
-   renderer" UI. Not present in either reference.
+1. **`attachmentId` concurrency control** — Prevents stale detach from tearing down a
+   newer attachment. Critical for rapid workspace switching.
+2. **Server-side headless mirror** — The server serializes full terminal state
+   (`@xterm/headless` + `@xterm/addon-serialize`), including alternate screen buffer
+   and terminal modes. This avoids client-side mode tracking and rehydrate-sequence
+   bookkeeping that other designs require.
+3. **`writeErrorCount` tracking** — Detects renderer corruption and surfaces a
+   "Restart renderer" UI.
 4. **Push + poll dual mode** — Graceful degradation if push delivery is unavailable.
 5. **`rendererRevision` guard** — Detects xterm recreation mid-bootstrap and aborts
    stale session attachment.
@@ -102,8 +74,9 @@ resumeSessionStream({ ... })    → stream activated (push events flow)
 is already in-flight from a previous subscription or from a race in the IPC bridge, it
 could arrive before screenState is fully written.
 
-**Reference pattern**: Superset gates with `isStreamReadyRef` — all incoming events queue
-in `pendingEventsRef` until restoration completes, then flush.
+**Alternative pattern**: Some designs gate client-side with an `isStreamReadyRef` flag
+and a `pendingEventsRef` queue — incoming events buffer until restoration completes,
+then flush in order.
 
 **Current mitigation**: Server-side `isPushStreamReady()` blocks push at the source.
 This works for the host-service path but doesn't guard against IPC bridge timing.
@@ -121,16 +94,15 @@ already updated by the time the effect fires. Theme live-sync works as-is.
 The server-side headless mirror uses `@xterm/headless` + `@xterm/addon-serialize`
 (`SerializeAddon.serialize()`). This serialization includes alternate screen buffer
 content and terminal modes. When `attachSession` returns `screenState`, the full TUI
-state (vim, less, htop) is preserved. No client-side mode tracking needed — this is
-architecturally cleaner than Superset's approach.
+state (vim, less, htop) is preserved. No client-side mode tracking needed.
 
 ### Gap 4: No WebGL Renderer (Impact: low)
 
 **What**: Large output bursts (e.g., build logs, test runs) render slower on the DOM
 renderer vs WebGL.
 
-**Reference pattern**: Superset loads WebglAddon asynchronously with DOM fallback on
-failure. Global flag prevents retrying WebGL after a GPU crash.
+**Alternative pattern**: Load `WebglAddon` asynchronously with DOM fallback on
+failure. A global flag prevents retrying WebGL after a GPU crash.
 
 **Current mitigation**: None. DOM renderer is functional but slower for high-throughput
 scenarios. This is a performance optimization, not a correctness issue.

@@ -4,15 +4,15 @@
 #
 # One-liner install:
 #   gh api -H 'Accept: application/vnd.github.v3.raw+json' \
-#     repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash
+#     repos/OWNER/stave/contents/scripts/setup-auto-update.sh | bash
 #
 # Uninstall:
 #   gh api -H 'Accept: application/vnd.github.v3.raw+json' \
-#     repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash -s -- uninstall
+#     repos/OWNER/stave/contents/scripts/setup-auto-update.sh | bash -s -- uninstall
 #
 # Status:
 #   gh api -H 'Accept: application/vnd.github.v3.raw+json' \
-#     repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash -s -- status
+#     repos/OWNER/stave/contents/scripts/setup-auto-update.sh | bash -s -- status
 # --------------------------------------------------------------------------
 set -euo pipefail
 
@@ -23,7 +23,7 @@ PLIST_NAME="${LABEL}.plist"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_NAME}"
 LOG_DIR="$HOME/Library/Logs/Stave"
 LOG_FILE="${LOG_DIR}/auto-update.log"
-REPO="${STAVE_REPO:-sendbird-playground/stave}"
+REPO="${STAVE_REPO:-OWNER/stave}"
 GUI_DOMAIN="gui/$(id -u)"
 
 info()  { printf "\033[1;34m==>\033[0m %s\n" "$1"; }
@@ -107,7 +107,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 
 APP_NAME="Stave"
-REPO="${STAVE_REPO:-sendbird-playground/stave}"
+REPO="${STAVE_REPO:-OWNER/stave}"
 DEFAULT_INSTALL_DIR="$HOME/Applications"
 INSTALL_DIR=""
 TARGET_APP="${INSTALL_DIR}/${APP_NAME}.app"
