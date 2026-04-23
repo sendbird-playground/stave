@@ -465,6 +465,20 @@ describe("Claude permission mode decisions", () => {
       toolName: "Bash",
     })).toBe("prompt");
   });
+
+  test("auto-allows TodoWrite in plan mode because it does not mutate the filesystem", () => {
+    // TodoWrite only mutates the in-session todo tracker, so hard-denying it
+    // just broke the agent's own progress tracking and caused mid-plan
+    // stalls.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "plan",
+      toolName: "TodoWrite",
+    })).toBe("allow");
+    expect(shouldAutoAllowClaudeTool({
+      permissionMode: "plan",
+      toolName: "TodoWrite",
+    })).toBe(true);
+  });
 });
 
 describe("buildClaudeSystemPrompt", () => {
@@ -516,7 +530,6 @@ describe("resolveClaudeDisallowedTools", () => {
       "MultiEdit",
       "Write",
       "NotebookEdit",
-      "TodoWrite",
     ]);
   });
 
@@ -525,6 +538,15 @@ describe("resolveClaudeDisallowedTools", () => {
       permissionMode: "default",
       runtimeDisallowedTools: ["Read"],
     })).toEqual(["Read"]);
+  });
+
+  test("does not disable TodoWrite in plan mode", () => {
+    // TodoWrite is auto-allowed in plan mode, so the disallowed-tools list
+    // must not drop it back onto the deny side.
+    expect(resolveClaudeDisallowedTools({
+      permissionMode: "plan",
+      runtimeDisallowedTools: [],
+    })).not.toContain("TodoWrite");
   });
 });
 
@@ -554,6 +576,15 @@ describe("shouldDenyClaudeToolInPlanMode", () => {
     expect(shouldDenyClaudeToolInPlanMode({
       toolName: "Read",
       input: { file_path: "/workspace/stave/README.md" },
+    })).toBe(false);
+  });
+
+  test("does not hard-deny TodoWrite in plan mode", () => {
+    // TodoWrite mutates only the in-session todo tracker, so plan mode must
+    // let it through.
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "TodoWrite",
+      input: { todos: [] },
     })).toBe(false);
   });
 });

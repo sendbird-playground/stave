@@ -97,7 +97,6 @@ const CLAUDE_MUTATING_FILE_TOOL_NAMES = [
   "MultiEdit",
   "Write",
   "NotebookEdit",
-  "TodoWrite",
 ] as const;
 const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
   CLAUDE_MUTATING_FILE_TOOL_NAMES.map((toolName) => toolName.toLowerCase()),
@@ -110,6 +109,10 @@ const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set(["exitplanmode"]);
  * each Read/Grep/Glob/WebFetch/WebSearch/BashOutput/NotebookRead call is pure
  * noise. Bash is intentionally excluded: even "read-only" commands can have
  * network side effects, so we keep prompting for it.
+ *
+ * TodoWrite is included because it only mutates the in-session todo tracker —
+ * no filesystem write — so blocking it in plan mode just broke the agent's
+ * own progress tracking and caused mid-plan stalls.
  */
 const CLAUDE_READ_ONLY_BUILTIN_TOOL_NAMES = new Set([
   "read",
@@ -121,6 +124,7 @@ const CLAUDE_READ_ONLY_BUILTIN_TOOL_NAMES = new Set([
   "websearch",
   "bashoutput",
   "todoread",
+  "todowrite",
 ]);
 const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
   "stave_get_workspace_information",
