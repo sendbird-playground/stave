@@ -66,6 +66,10 @@ describe("buildCurrentTaskAwarenessRetrievedContext", () => {
     expect(context.content).toContain("Write a plan file at the target's `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`");
     expect(context.content).toContain("Do NOT copy the source workspace's plan, notes, or todos verbatim");
     expect(context.content).toContain("append ONLY a short pointer like \"See plan:");
+    // The handoff procedure must remind the agent to wait until plan mode has
+    // exited before writing the plan file — otherwise the agent attempts the
+    // Write mid-plan, gets blocked, and stalls.
+    expect(context.content.toLowerCase()).toMatch(/after (?:you )?exit(?:ing)? plan mode/);
     expect(context.content).toContain("Prompt Input Redesign | node 1:2 | https://www.figma.com/design/FILE123/Prompt?node-id=1-2 | Latest approved mock");
   });
 

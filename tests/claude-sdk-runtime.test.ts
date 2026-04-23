@@ -465,6 +465,20 @@ describe("Claude permission mode decisions", () => {
       toolName: "Bash",
     })).toBe("prompt");
   });
+
+  test("auto-allows TodoWrite in plan mode because it does not mutate the filesystem", () => {
+    // TodoWrite only mutates the in-session todo tracker, so hard-denying it
+    // just broke the agent's own progress tracking and caused mid-plan
+    // stalls.
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "plan",
+      toolName: "TodoWrite",
+    })).toBe("allow");
+    expect(shouldAutoAllowClaudeTool({
+      permissionMode: "plan",
+      toolName: "TodoWrite",
+    })).toBe(true);
+  });
 });
 
 describe("buildClaudeSystemPrompt", () => {
@@ -507,6 +521,10 @@ describe("resolveClaudeAgentProgressSummaries", () => {
 
 describe("resolveClaudeDisallowedTools", () => {
   test("adds mutating file tools while Claude plan mode is enabled", () => {
+    // Write is NOT in the blanket disallow list: the per-call
+    // shouldDenyClaudeToolInPlanMode gate can allow Write to handoff plan
+    // files. Edit / MultiEdit / NotebookEdit always target existing source
+    // files, so they stay globally blocked in plan mode.
     expect(resolveClaudeDisallowedTools({
       permissionMode: "plan",
       runtimeDisallowedTools: ["Read", "Edit"],
@@ -514,10 +532,19 @@ describe("resolveClaudeDisallowedTools", () => {
       "Read",
       "Edit",
       "MultiEdit",
-      "Write",
       "NotebookEdit",
-      "TodoWrite",
     ]);
+  });
+
+  test("keeps Write callable in plan mode so the handoff gate can decide", () => {
+    const disallowed = resolveClaudeDisallowedTools({
+      permissionMode: "plan",
+      runtimeDisallowedTools: [],
+    });
+    expect(disallowed).not.toContain("Write");
+    expect(disallowed).toEqual(
+      expect.arrayContaining(["Edit", "MultiEdit", "NotebookEdit"]),
+    );
   });
 
   test("preserves runtime disallowed tools outside plan mode", () => {
@@ -525,6 +552,15 @@ describe("resolveClaudeDisallowedTools", () => {
       permissionMode: "default",
       runtimeDisallowedTools: ["Read"],
     })).toEqual(["Read"]);
+  });
+
+  test("does not disable TodoWrite in plan mode", () => {
+    // TodoWrite is auto-allowed in plan mode, so the disallowed-tools list
+    // must not drop it back onto the deny side.
+    expect(resolveClaudeDisallowedTools({
+      permissionMode: "plan",
+      runtimeDisallowedTools: [],
+    })).not.toContain("TodoWrite");
   });
 });
 
@@ -554,6 +590,49 @@ describe("shouldDenyClaudeToolInPlanMode", () => {
     expect(shouldDenyClaudeToolInPlanMode({
       toolName: "Read",
       input: { file_path: "/workspace/stave/README.md" },
+    })).toBe(false);
+  });
+
+  test("does not hard-deny TodoWrite in plan mode", () => {
+    // TodoWrite mutates only the in-session todo tracker, so plan mode must
+    // let it through.
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "TodoWrite",
+      input: { todos: [] },
+    })).toBe(false);
+  });
+
+  test("allows Write when the target is a workspace handoff plan file", () => {
+    // The workspace handoff convention requires writing a plan file under
+    // .stave/context/plans/**. Plan mode must make a per-call exception for
+    // that exact path so the convention is actually followable.
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Write",
+      input: {
+        file_path:
+          "/workspace/stave/.stave/context/plans/abcd1234_2026-04-01T01-02-03.md",
+        content: "## Plan\n- Do the thing",
+      },
+    })).toBe(false);
+  });
+
+  test("still denies Write for non-handoff targets in plan mode", () => {
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Write",
+      input: {
+        file_path: "/workspace/stave/src/app.ts",
+        content: "export const a = 1;",
+      },
+    })).toBe(true);
+  });
+
+  test("allows Write to a handoff plan file with a relative path", () => {
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Write",
+      input: {
+        file_path: ".stave/context/plans/abcd1234_2026-04-01T01-02-03.md",
+        content: "## Plan\n- Ship",
+      },
     })).toBe(false);
   });
 });

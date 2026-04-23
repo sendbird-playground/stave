@@ -102,19 +102,48 @@ export async function persistWorkspacePlanFile(args: {
   taskId: string;
   planText: string;
 }): Promise<string | null> {
+  const filePath = buildWorkspacePlanFilePath({ taskId: args.taskId });
   try {
-    const filePath = buildWorkspacePlanFilePath({ taskId: args.taskId });
-    await window.api?.fs?.createDirectory?.({
+    const createResult = await window.api?.fs?.createDirectory?.({
       rootPath: args.rootPath,
       directoryPath: WORKSPACE_PLANS_DIRECTORY,
     });
-    await window.api?.fs?.writeFile?.({
+    // `fs:create-directory` IPC returns `{ ok: false, alreadyExists: true }`
+    // when the directory is already present — treat that as success. Any
+    // other `ok: false` is a real failure and must not be silently papered
+    // over the way the previous version did.
+    if (
+      createResult
+      && createResult.ok === false
+      && !(
+        "alreadyExists" in createResult
+        && createResult.alreadyExists === true
+      )
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[plans] createDirectory failed while persisting plan",
+        { filePath, stderr: createResult.stderr },
+      );
+      return null;
+    }
+    const writeResult = await window.api?.fs?.writeFile?.({
       rootPath: args.rootPath,
       filePath,
       content: normalizePlanText(args.planText),
     });
+    if (writeResult && writeResult.ok === false) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[plans] writeFile failed while persisting plan",
+        { filePath, stderr: writeResult.stderr },
+      );
+      return null;
+    }
     return filePath;
-  } catch {
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn("[plans] IPC threw while persisting plan", { filePath, error });
     return null;
   }
 }

@@ -97,7 +97,6 @@ const CLAUDE_MUTATING_FILE_TOOL_NAMES = [
   "MultiEdit",
   "Write",
   "NotebookEdit",
-  "TodoWrite",
 ] as const;
 const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
   CLAUDE_MUTATING_FILE_TOOL_NAMES.map((toolName) => toolName.toLowerCase()),
@@ -110,6 +109,10 @@ const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set(["exitplanmode"]);
  * each Read/Grep/Glob/WebFetch/WebSearch/BashOutput/NotebookRead call is pure
  * noise. Bash is intentionally excluded: even "read-only" commands can have
  * network side effects, so we keep prompting for it.
+ *
+ * TodoWrite is included because it only mutates the in-session todo tracker —
+ * no filesystem write — so blocking it in plan mode just broke the agent's
+ * own progress tracking and caused mid-plan stalls.
  */
 const CLAUDE_READ_ONLY_BUILTIN_TOOL_NAMES = new Set([
   "read",
@@ -121,6 +124,7 @@ const CLAUDE_READ_ONLY_BUILTIN_TOOL_NAMES = new Set([
   "websearch",
   "bashoutput",
   "todoread",
+  "todowrite",
 ]);
 const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
   "stave_get_workspace_information",
@@ -438,6 +442,34 @@ function isMutatingClaudeBashCommand(command: string) {
   return CLAUDE_MUTATING_BASH_PATTERNS.some((pattern) => pattern.test(command));
 }
 
+/**
+ * Tools that stay globally disallowed while plan mode is active. Unlike Write,
+ * Edit / MultiEdit / NotebookEdit always target existing source files and
+ * never a handoff plan file — so there is no reason to route them through the
+ * per-call gate.
+ */
+const CLAUDE_PLAN_MODE_DISALLOWED_TOOL_NAMES = [
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+] as const;
+
+/**
+ * Matches `.stave/context/plans/<file>.md` anywhere in a path, so both
+ * absolute workspace-rooted paths ("/workspace/.../.stave/context/plans/x.md")
+ * and workspace-relative paths (".stave/context/plans/x.md") resolve as
+ * handoff plan files.
+ */
+const CLAUDE_HANDOFF_PLAN_FILE_PATTERN =
+  /(?:^|\/)\.stave\/context\/plans\/[^\\/]+\.md$/;
+
+function isHandoffPlanFilePath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    CLAUDE_HANDOFF_PLAN_FILE_PATTERN.test(value.trim())
+  );
+}
+
 export function resolveClaudeDisallowedTools(args: {
   permissionMode: ClaudePermissionMode;
   runtimeDisallowedTools?: readonly string[] | null;
@@ -451,7 +483,7 @@ export function resolveClaudeDisallowedTools(args: {
     });
   }
   if (args.permissionMode === "plan") {
-    CLAUDE_MUTATING_FILE_TOOL_NAMES.forEach((toolName) => {
+    CLAUDE_PLAN_MODE_DISALLOWED_TOOL_NAMES.forEach((toolName) => {
       merged.add(toolName);
     });
   }
@@ -464,6 +496,15 @@ export function shouldDenyClaudeToolInPlanMode(args: {
 }) {
   const normalizedToolName = args.toolName.trim().toLowerCase();
   if (CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES.has(normalizedToolName)) {
+    // Write is the one mutating tool we conditionally allow: the handoff
+    // convention writes plan files into `.stave/context/plans/**`, and the
+    // runtime already treats that directory as session metadata.
+    if (
+      normalizedToolName === "write" &&
+      isHandoffPlanFilePath(args.input.file_path)
+    ) {
+      return false;
+    }
     return true;
   }
   if (normalizedToolName !== "bash") {

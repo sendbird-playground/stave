@@ -5,10 +5,37 @@ import {
   isWorkspacePlanFilePath,
   MAX_WORKSPACE_PLANS,
   parseWorkspacePlanFilePath,
+  persistWorkspacePlanFile,
   resolveWorkspacePlanPersistenceText,
   sortWorkspacePlansNewestFirst,
 } from "@/lib/plans";
 import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
+
+type FsCreateDirectoryResult =
+  | { ok: true }
+  | { ok: false; alreadyExists?: boolean; stderr?: string };
+
+type FsWriteFileResult = { ok: boolean; stderr?: string };
+
+type StubApi = {
+  fs: {
+    createDirectory: (args: unknown) => Promise<FsCreateDirectoryResult>;
+    writeFile: (args: unknown) => Promise<FsWriteFileResult>;
+  };
+};
+
+function installStubApi(api: StubApi) {
+  const globalScope = globalThis as unknown as { window?: { api?: StubApi } };
+  const originalWindow = globalScope.window;
+  globalScope.window = { ...(originalWindow ?? {}), api };
+  return () => {
+    if (originalWindow === undefined) {
+      delete globalScope.window;
+    } else {
+      globalScope.window = originalWindow;
+    }
+  };
+}
 
 describe("workspace plans helpers", () => {
   test("writes new plans into the workspace context plans directory", () => {
@@ -114,5 +141,106 @@ describe("workspace plans helpers", () => {
     });
 
     expect(persisted).toBe("## Plan\n- Inspect\n- Patch\n- Verify");
+  });
+});
+
+describe("persistWorkspacePlanFile", () => {
+  const taskId = "12345678-aaaa-bbbb-cccc-1234567890ab";
+  const rootPath = "/tmp/ws";
+
+  test("returns the file path when IPC create + write both succeed", async () => {
+    const restore = installStubApi({
+      fs: {
+        createDirectory: async () => ({ ok: true }),
+        writeFile: async () => ({ ok: true }),
+      },
+    });
+    try {
+      const result = await persistWorkspacePlanFile({
+        rootPath,
+        taskId,
+        planText: "## Plan\n- Do",
+      });
+      expect(result).toMatch(/^\.stave\/context\/plans\/12345678_/);
+      expect(result?.endsWith(".md")).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  test("treats alreadyExists directory as success", async () => {
+    const restore = installStubApi({
+      fs: {
+        createDirectory: async () => ({ ok: false, alreadyExists: true }),
+        writeFile: async () => ({ ok: true }),
+      },
+    });
+    try {
+      const result = await persistWorkspacePlanFile({
+        rootPath,
+        taskId,
+        planText: "## Plan",
+      });
+      expect(result).toMatch(/^\.stave\/context\/plans\/12345678_/);
+    } finally {
+      restore();
+    }
+  });
+
+  test("returns null when writeFile reports ok:false", async () => {
+    const restore = installStubApi({
+      fs: {
+        createDirectory: async () => ({ ok: true }),
+        writeFile: async () => ({ ok: false, stderr: "EROFS: read-only file system" }),
+      },
+    });
+    try {
+      const result = await persistWorkspacePlanFile({
+        rootPath,
+        taskId,
+        planText: "## Plan",
+      });
+      expect(result).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test("returns null when createDirectory reports ok:false without alreadyExists", async () => {
+    const restore = installStubApi({
+      fs: {
+        createDirectory: async () => ({ ok: false, stderr: "Permission denied" }),
+        writeFile: async () => ({ ok: true }),
+      },
+    });
+    try {
+      const result = await persistWorkspacePlanFile({
+        rootPath,
+        taskId,
+        planText: "## Plan",
+      });
+      expect(result).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test("returns null when IPC transport itself throws", async () => {
+    const restore = installStubApi({
+      fs: {
+        createDirectory: async () => { throw new Error("ipc transport closed"); },
+        writeFile: async () => ({ ok: true }),
+      },
+    });
+    try {
+      const result = await persistWorkspacePlanFile({
+        rootPath,
+        taskId,
+        planText: "## Plan",
+      });
+      expect(result).toBeNull();
+    } finally {
+      restore();
+    }
   });
 });
