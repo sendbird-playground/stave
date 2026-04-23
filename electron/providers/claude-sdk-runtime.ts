@@ -442,6 +442,34 @@ function isMutatingClaudeBashCommand(command: string) {
   return CLAUDE_MUTATING_BASH_PATTERNS.some((pattern) => pattern.test(command));
 }
 
+/**
+ * Tools that stay globally disallowed while plan mode is active. Unlike Write,
+ * Edit / MultiEdit / NotebookEdit always target existing source files and
+ * never a handoff plan file — so there is no reason to route them through the
+ * per-call gate.
+ */
+const CLAUDE_PLAN_MODE_DISALLOWED_TOOL_NAMES = [
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+] as const;
+
+/**
+ * Matches `.stave/context/plans/<file>.md` anywhere in a path, so both
+ * absolute workspace-rooted paths ("/workspace/.../.stave/context/plans/x.md")
+ * and workspace-relative paths (".stave/context/plans/x.md") resolve as
+ * handoff plan files.
+ */
+const CLAUDE_HANDOFF_PLAN_FILE_PATTERN =
+  /(?:^|\/)\.stave\/context\/plans\/[^\\/]+\.md$/;
+
+function isHandoffPlanFilePath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    CLAUDE_HANDOFF_PLAN_FILE_PATTERN.test(value.trim())
+  );
+}
+
 export function resolveClaudeDisallowedTools(args: {
   permissionMode: ClaudePermissionMode;
   runtimeDisallowedTools?: readonly string[] | null;
@@ -455,7 +483,7 @@ export function resolveClaudeDisallowedTools(args: {
     });
   }
   if (args.permissionMode === "plan") {
-    CLAUDE_MUTATING_FILE_TOOL_NAMES.forEach((toolName) => {
+    CLAUDE_PLAN_MODE_DISALLOWED_TOOL_NAMES.forEach((toolName) => {
       merged.add(toolName);
     });
   }
@@ -468,6 +496,15 @@ export function shouldDenyClaudeToolInPlanMode(args: {
 }) {
   const normalizedToolName = args.toolName.trim().toLowerCase();
   if (CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES.has(normalizedToolName)) {
+    // Write is the one mutating tool we conditionally allow: the handoff
+    // convention writes plan files into `.stave/context/plans/**`, and the
+    // runtime already treats that directory as session metadata.
+    if (
+      normalizedToolName === "write" &&
+      isHandoffPlanFilePath(args.input.file_path)
+    ) {
+      return false;
+    }
     return true;
   }
   if (normalizedToolName !== "bash") {
