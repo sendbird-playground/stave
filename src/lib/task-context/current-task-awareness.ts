@@ -191,7 +191,7 @@ export function buildCurrentTaskAwarenessRetrievedContext(args: {
   const handoffProcedureLines = [
     "When you create a new Stave workspace to hand off follow-up work:",
     "1. Use `stave_create_workspace` to create the target workspace and capture its `root` path.",
-    "2. Write a plan file at the target's `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`. Use the `Write` tool directly against the new worktree root returned by `stave_create_workspace`. Do NOT put the plan body into Notes.",
+    "2. Write a plan file at the target's `.stave/context/plans/<taskIdPrefix>_<timestamp>.md`. Use the `Write` tool directly against the new worktree root returned by `stave_create_workspace`. Perform this Write only after exiting plan mode (via `ExitPlanMode`) — plan mode blocks Writes to anything except that handoff path, so it is safer to finish planning first. Do NOT put the plan body into Notes.",
     "3. If no task id exists yet, use a placeholder prefix such as `handoff` and rename the file to `<newTaskIdPrefix>_<timestamp>.md` once a task id is assigned.",
     "4. In the target workspace's Notes, append ONLY a short pointer like \"See plan: .stave/context/plans/<filename>.md\". Do not duplicate the plan body into Notes.",
     "5. Target Todos should be terse action items that point back at the plan file, not a re-statement of the plan.",
