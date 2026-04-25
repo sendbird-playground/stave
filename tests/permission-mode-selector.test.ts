@@ -6,12 +6,17 @@ describe("Codex permission mode options", () => {
     expect(getPermissionModeOptions("codex").map((option) => option.value)).toEqual([
       "untrusted",
       "on-request",
+      "on-failure",
       "never",
     ]);
   });
 
   test("cycles through untrusted to on-request", () => {
     expect(cyclePermissionMode({ providerId: "codex", current: "untrusted" })).toBe("on-request");
+  });
+
+  test("cycles through on-request to on-failure", () => {
+    expect(cyclePermissionMode({ providerId: "codex", current: "on-request" })).toBe("on-failure");
   });
 });
 

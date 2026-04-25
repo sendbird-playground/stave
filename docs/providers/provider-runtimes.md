@@ -300,6 +300,7 @@ If you want the user-facing setup workflow instead of the runtime internals, use
   - `Manual`: `read-only` + `on-request` + network off + web search disabled
   - `Guided`: `workspace-write` + `untrusted` + network off + web search cached
   - `Auto`: `danger-full-access` + `never` + network on + web search live
+  - `on-failure` approval mode is also supported for custom setups that should try sandboxed execution first and ask only after a blocked operation fails.
 
 Current Codex defaults follow the App Server-aligned baseline in Stave: `workspace-write` file access, `untrusted` approvals, `network access = off`, `web search = cached`, `reasoning effort = medium`, raw reasoning off, and reasoning summary auto-detection enabled.
 
@@ -311,12 +312,12 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex App Server transport: local `codex app-server` from Codex CLI `0.118.0`
-- Legacy rollback path: `@openai/codex-sdk@0.118.0`
-- Codex CLI baseline: `0.118.0`
-- Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
+- Codex App Server transport: local `codex app-server` from Codex CLI `0.125.0`
+- Legacy rollback path: `@openai/codex-sdk@0.121.0`
+- Codex CLI baseline: `0.125.0`
+- Current Stave-supported Codex model IDs: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 
-Stave requires a user-installed Codex CLI (`codex` ≥ 0.118.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexBinaryPath` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
+Stave requires a user-installed Codex CLI (`codex` ≥ 0.125.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexBinaryPath` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
 
 Claude follows the same pattern. Users can force a specific local `claude` install via `runtimeOptions.claudeBinaryPath` or the Settings dialog's Claude Binary override before Stave falls back to environment-based discovery.
 

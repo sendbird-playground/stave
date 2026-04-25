@@ -296,6 +296,14 @@ const CODEX_APPROVAL_POLICY_HELP = [
     example:
       "Use this when you want more explicit checkpoints than the default low-friction setup.",
   },
+  {
+    value: "on-failure",
+    label: "on-failure",
+    description:
+      "Let Codex try inside the sandbox first, then ask only if an operation fails and needs escalation.",
+    example:
+      "Useful when you want fast local progress without granting broad permissions up front.",
+  },
 ] as const satisfies readonly ExplainedSelectOption<
   NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]>
 >[];

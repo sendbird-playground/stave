@@ -53,6 +53,12 @@ describe("normalizeCodexApprovalPolicy", () => {
   test("falls back to the safe default when persisted data is invalid", () => {
     expect(normalizeCodexApprovalPolicy({ value: "bogus" })).toBe("untrusted");
   });
+
+  test("preserves the Codex on-failure approval mode", () => {
+    expect(normalizeCodexApprovalPolicy({ value: "on-failure" })).toBe(
+      "on-failure",
+    );
+  });
 });
 
 describe("buildProviderRuntimeOptions", () => {

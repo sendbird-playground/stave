@@ -1036,7 +1036,7 @@ export interface AppSettings {
   claudeFastMode: boolean;
   codexFileAccess: "read-only" | "workspace-write" | "danger-full-access";
   codexNetworkAccess: boolean;
-  codexApprovalPolicy: "never" | "on-request" | "untrusted";
+  codexApprovalPolicy: "never" | "on-request" | "on-failure" | "untrusted";
   codexBinaryPath: string;
   codexReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh";
   codexWebSearch: "disabled" | "cached" | "live";
@@ -1956,7 +1956,7 @@ const defaultSettings: AppSettings = {
   claudeTaskBudgetTokens: 0,
   claudeAdvisorModel: "",
   claudeSettingSources: ["project"],
-  claudeEffort: "medium",
+  claudeEffort: "high",
   claudeThinkingMode: "adaptive",
   claudeAgentProgressSummaries: false,
   claudeFastMode: false,

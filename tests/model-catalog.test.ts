@@ -22,13 +22,15 @@ import {
 describe("model catalog", () => {
   test("includes the verified Codex model set", () => {
     expect(CODEX_MODEL_OPTIONS).toEqual([
+      "gpt-5.5",
       "gpt-5.4",
       "gpt-5.4-mini",
       "gpt-5.3-codex",
     ]);
   });
 
-  test("formats GPT-5.4 with the canonical label", () => {
+  test("formats current GPT models with canonical labels", () => {
+    expect(toHumanModelName({ model: "gpt-5.5" })).toBe("GPT-5.5");
     expect(toHumanModelName({ model: "gpt-5.4" })).toBe("GPT-5.4");
   });
 
@@ -54,7 +56,7 @@ describe("model catalog", () => {
     ).toBe("xhigh");
     expect(
       resolveDefaultClaudeEffortForModel({ model: "claude-sonnet-4-6" }),
-    ).toBe("medium");
+    ).toBe("high");
   });
 
   test("only updates Claude effort on model switch when the current value is still the previous model default", () => {
@@ -62,7 +64,7 @@ describe("model catalog", () => {
       resolveClaudeEffortForModelSwitch({
         previousModel: "claude-sonnet-4-6",
         nextModel: DEFAULT_CLAUDE_OPUS_MODEL,
-        currentEffort: "medium",
+        currentEffort: "high",
       }),
     ).toBe("xhigh");
     expect(
@@ -71,7 +73,7 @@ describe("model catalog", () => {
         nextModel: "claude-sonnet-4-6",
         currentEffort: "xhigh",
       }),
-    ).toBe("medium");
+    ).toBe("high");
     expect(
       resolveClaudeEffortForModelSwitch({
         previousModel: "claude-sonnet-4-6",

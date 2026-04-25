@@ -57,14 +57,14 @@
     "test:ci": "bun run typecheck && bun test && bun run build && bun run build:desktop"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.112",
+    "@anthropic-ai/claude-agent-sdk": "0.2.120",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/inter": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
-    "@openai/codex-sdk": "0.121.0",
+    "@openai/codex-sdk": "0.125.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@vscode/ripgrep": "^1.17.1",
     "@xterm/addon-fit": "^0.11.0",

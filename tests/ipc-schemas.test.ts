@@ -10,7 +10,7 @@ import {
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 
 describe("provider IPC schemas", () => {
-  test("rejects unknown Codex approval policies in runtime options", () => {
+  test("accepts Codex on-failure approval policy in runtime options", () => {
     const parsed = StreamTurnArgsSchema.safeParse({
       providerId: "codex",
       prompt: "continue",
@@ -19,7 +19,7 @@ describe("provider IPC schemas", () => {
       },
     });
 
-    expect(parsed.success).toBe(false);
+    expect(parsed.success).toBe(true);
   });
 
   test("accepts Claude xhigh effort in runtime options", () => {
