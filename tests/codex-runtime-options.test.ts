@@ -30,9 +30,9 @@ describe("resolveEffectiveCodexApprovalPolicy", () => {
 
   test("preserves the configured approval policy when Codex plan mode is disabled", () => {
     expect(resolveEffectiveCodexApprovalPolicy({
-      approvalPolicy: "on-failure",
+      approvalPolicy: "untrusted",
       planMode: false,
-    })).toBe("on-failure");
+    })).toBe("untrusted");
   });
 
   test("falls back to the App Server-aligned default when approval is missing", () => {

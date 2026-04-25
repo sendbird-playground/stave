@@ -54,9 +54,9 @@ describe("normalizeCodexApprovalPolicy", () => {
     expect(normalizeCodexApprovalPolicy({ value: "bogus" })).toBe("untrusted");
   });
 
-  test("preserves the Codex on-failure approval mode", () => {
+  test("falls back for the deprecated Codex on-failure approval mode", () => {
     expect(normalizeCodexApprovalPolicy({ value: "on-failure" })).toBe(
-      "on-failure",
+      "untrusted",
     );
   });
 });

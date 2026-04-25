@@ -509,12 +509,6 @@ describe("resolveApprovalPolicy", () => {
     expect(resolveApprovalPolicy({ envValue: "bogus-policy" })).toBeUndefined();
   });
 
-  test("passes through on-failure approval mode", () => {
-    expect(resolveApprovalPolicy({ runtimeValue: "on-failure" })).toBe(
-      "on-failure",
-    );
-  });
-
   test("forces never in plan mode when a fallback policy is provided", () => {
     expect(resolveApprovalPolicy({
       runtimeValue: "on-request",

@@ -300,7 +300,6 @@ If you want the user-facing setup workflow instead of the runtime internals, use
   - `Manual`: `read-only` + `on-request` + network off + web search disabled
   - `Guided`: `workspace-write` + `untrusted` + network off + web search cached
   - `Auto`: `danger-full-access` + `never` + network on + web search live
-  - `on-failure` approval mode is also supported for custom setups that should try sandboxed execution first and ask only after a blocked operation fails.
 
 Current Codex defaults follow the App Server-aligned baseline in Stave: `workspace-write` file access, `untrusted` approvals, `network access = off`, `web search = cached`, `reasoning effort = medium`, raw reasoning off, and reasoning summary auto-detection enabled.
 

@@ -1036,7 +1036,7 @@ export interface AppSettings {
   claudeFastMode: boolean;
   codexFileAccess: "read-only" | "workspace-write" | "danger-full-access";
   codexNetworkAccess: boolean;
-  codexApprovalPolicy: "never" | "on-request" | "on-failure" | "untrusted";
+  codexApprovalPolicy: "never" | "on-request" | "untrusted";
   codexBinaryPath: string;
   codexReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh";
   codexWebSearch: "disabled" | "cached" | "live";

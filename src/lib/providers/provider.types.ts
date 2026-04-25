@@ -412,7 +412,7 @@ export interface StaveAutoClaudeRoleRuntimeOverrides {
 }
 
 export interface StaveAutoCodexRoleRuntimeOverrides {
-  approvalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+  approvalPolicy?: "never" | "on-request" | "untrusted";
   reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
   fastMode?: boolean;
 }
@@ -554,7 +554,7 @@ export interface ProviderRuntimeOptions {
   claudeResumeSessionId?: string;
   codexFileAccess?: "read-only" | "workspace-write" | "danger-full-access";
   codexNetworkAccess?: boolean;
-  codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+  codexApprovalPolicy?: "never" | "on-request" | "untrusted";
   codexBinaryPath?: string;
   codexReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
   codexWebSearch?: "disabled" | "cached" | "live";
