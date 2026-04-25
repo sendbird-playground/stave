@@ -187,7 +187,7 @@ export const STAVE_AUTO_MODEL_PRESETS = [
     id: "recommended",
     label: "Recommended",
     description:
-      "Balanced Claude + Codex mix. Supervisor uses Sonnet. Verify uses GPT-5.4.",
+      "Balanced Claude + Codex mix. Supervisor uses Sonnet. Verify uses GPT-5.5.",
   },
   {
     id: "recommended-1m",
@@ -205,7 +205,7 @@ export const STAVE_AUTO_MODEL_PRESETS = [
     id: "codex-only",
     label: "Codex Only",
     description:
-      "Use GPT-5.4 Mini for lightweight classifier/supervisor/general/quick-edit roles and keep heavy work on GPT-5.4 / GPT-5.3-Codex.",
+      "Use GPT-5.4 Mini for lightweight classifier/supervisor/general/quick-edit roles and keep heavy work on GPT-5.5 / GPT-5.3-Codex.",
   },
 ] as const satisfies ReadonlyArray<{
   id: StaveAutoModelPresetId;
@@ -225,7 +225,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<
     implementModel: "gpt-5.3-codex",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6",
-    verifyModel: "gpt-5.4",
+    verifyModel: "gpt-5.5",
   },
   "recommended-1m": {
     classifierModel: "claude-haiku-4-5",
@@ -235,7 +235,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<
     implementModel: "gpt-5.3-codex",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6[1m]",
-    verifyModel: "gpt-5.4",
+    verifyModel: "gpt-5.5",
   },
   "claude-only": {
     classifierModel: "claude-haiku-4-5",
@@ -250,12 +250,12 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<
   "codex-only": {
     classifierModel: "gpt-5.4-mini",
     supervisorModel: "gpt-5.4-mini",
-    planModel: "gpt-5.4",
-    analyzeModel: "gpt-5.4",
+    planModel: "gpt-5.5",
+    analyzeModel: "gpt-5.5",
     implementModel: "gpt-5.3-codex",
     quickEditModel: "gpt-5.4-mini",
     generalModel: "gpt-5.4-mini",
-    verifyModel: "gpt-5.4",
+    verifyModel: "gpt-5.5",
   },
 };
 

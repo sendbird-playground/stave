@@ -93,7 +93,7 @@ export const PROVIDER_DESCRIPTORS = [
     iconUrl: CODEX_COLOR_ICON_URL,
     fallbackLabel: "O",
     models: CODEX_MODEL_OPTIONS,
-    defaultModel: "gpt-5.4",
+    defaultModel: "gpt-5.5",
     sessionLabel: "Codex thread ID",
     capabilities: {
       nativeCommandCatalog: true,

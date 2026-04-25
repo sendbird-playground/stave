@@ -27,7 +27,7 @@ When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `
 | `implement`  | `gpt-5.3-codex`     | feature work, patching, refactors, test writing |
 | `quick_edit` | `claude-haiku-4-5`  | rename, typo, tiny targeted changes             |
 | `general`    | `claude-sonnet-4-6` | balanced default path                           |
-| `verify`     | `gpt-5.4`           | orchestration-only validation/review step       |
+| `verify`     | `gpt-5.5`           | orchestration-only validation/review step       |
 
 ### Complexity signals
 

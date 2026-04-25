@@ -59,8 +59,8 @@ Urgency signals that trigger `fastMode: true`: _빠르게, 빨리, quick, fast, 
 
 | Chosen model        | Fallback when unavailable |
 | ------------------- | ------------------------- |
-| `claude-opus-4-7`   | `gpt-5.4`                 |
-| `claude-sonnet-4-6` | `gpt-5.4`                 |
+| `claude-opus-4-7`   | `gpt-5.5`                 |
+| `claude-sonnet-4-6` | `gpt-5.5`                 |
 | `claude-haiku-4-5`  | `gpt-5.3-codex`           |
 | `gpt-5.5`           | `claude-opus-4-7`         |
 | `gpt-5.4`           | `claude-opus-4-7`         |
@@ -102,7 +102,7 @@ Stave Auto now uses presets plus role-based settings under **Settings → Provid
 
 | Preset             | Summary                                                                                                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Recommended`      | Current mixed default. Uses Claude for classifier/planning/analysis, Sonnet for supervisor, Codex for implementation, and `gpt-5.4` for verify.                   |
+| `Recommended`      | Current mixed default. Uses Claude for classifier/planning/analysis, Sonnet for supervisor, Codex for implementation, and `gpt-5.5` for verify.                   |
 | `Recommended (1M)` | Same as Recommended, but switches supervisor, analyze, and general to the `[1m]` variants.                                                                        |
 | `Claude Only`      | Keeps every role on Claude models only, with supervisor on Claude Sonnet.                                                                                         |
 | `Codex Only`       | Keeps every role on Codex models only, using `gpt-5.4-mini` for lightweight classifier/general/quick-edit/supervisor work and `gpt-5.3-codex` for implementation. |
@@ -118,7 +118,7 @@ Stave Auto now uses presets plus role-based settings under **Settings → Provid
 | `staveAutoImplementModel`            | `gpt-5.3-codex`     | Implement/build/patch/refactor                                                      |
 | `staveAutoQuickEditModel`            | `claude-haiku-4-5`  | Tiny edits                                                                          |
 | `staveAutoGeneralModel`              | `claude-sonnet-4-6` | Balanced default                                                                    |
-| `staveAutoVerifyModel`               | `gpt-5.4`           | Validation/review step in orchestration                                             |
+| `staveAutoVerifyModel`               | `gpt-5.5`           | Validation/review step in orchestration                                             |
 | `staveAutoOrchestrationMode`         | `auto`              | `off`, `auto`, or `aggressive`                                                      |
 | `staveAutoFastMode`                  | `false`             | Request fast execution for Stave Auto turns when supported by the resolved provider |
 | `staveAutoMaxSubtasks`               | `3`                 | Max subtasks per orchestration run                                                  |

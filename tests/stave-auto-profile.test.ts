@@ -47,13 +47,13 @@ describe("createDefaultStaveAutoRoleRuntimeOverrides", () => {
 });
 
 describe("stave auto profile presets", () => {
-  test("uses GPT-5.4 as the recommended verify model", () => {
+  test("uses GPT-5.5 as the recommended verify model", () => {
     const recommended = buildStaveAutoModelSettingsPatch({
       presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
     });
 
     expect(recommended.staveAutoImplementModel).toBe("gpt-5.3-codex");
-    expect(recommended.staveAutoVerifyModel).toBe("gpt-5.4");
+    expect(recommended.staveAutoVerifyModel).toBe("gpt-5.5");
   });
 
   test("detects known presets from matching role settings", () => {
@@ -122,7 +122,7 @@ describe("stave auto profile presets", () => {
     expect(patch.staveAutoClassifierModel).toBe("claude-haiku-4-5");
     expect(patch.staveAutoQuickEditModel).toBe("claude-haiku-4-5");
     expect(patch.staveAutoImplementModel).toBe("gpt-5.3-codex");
-    expect(patch.staveAutoVerifyModel).toBe("gpt-5.4");
+    expect(patch.staveAutoVerifyModel).toBe("gpt-5.5");
   });
 
   test("builds the runtime profile from preset-backed settings", () => {
@@ -135,7 +135,7 @@ describe("stave auto profile presets", () => {
 
     expect(profile.classifierModel).toBe("gpt-5.4-mini");
     expect(profile.implementModel).toBe("gpt-5.3-codex");
-    expect(profile.verifyModel).toBe("gpt-5.4");
+    expect(profile.verifyModel).toBe("gpt-5.5");
     expect(profile.fastMode).toBe(true);
     expect(profile.claudeFastModeSupported).toBe(true);
     expect(profile.codexFastModeSupported).toBe(true);

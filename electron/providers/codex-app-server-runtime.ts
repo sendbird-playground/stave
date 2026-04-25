@@ -4168,7 +4168,7 @@ export async function streamCodexWithAppServer(
               collaborationMode: {
                 mode: "plan",
                 settings: {
-                  model: args.runtimeOptions?.model?.trim() || "gpt-5.4",
+                  model: args.runtimeOptions?.model?.trim() || "gpt-5.5",
                   reasoning_effort:
                     args.runtimeOptions?.codexReasoningEffort ?? null,
                   developer_instructions:

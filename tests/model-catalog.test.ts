@@ -45,6 +45,9 @@ describe("model catalog", () => {
     expect(getDefaultModelForProvider({ providerId: "claude-code" })).toBe(
       "claude-sonnet-4-6",
     );
+    expect(getDefaultModelForProvider({ providerId: "codex" })).toBe(
+      "gpt-5.5",
+    );
   });
 
   test("uses xhigh as the Claude effort default for Opus models", () => {
