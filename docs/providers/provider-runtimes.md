@@ -27,7 +27,7 @@ When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `
 | `implement`  | `gpt-5.3-codex`     | feature work, patching, refactors, test writing |
 | `quick_edit` | `claude-haiku-4-5`  | rename, typo, tiny targeted changes             |
 | `general`    | `claude-sonnet-4-6` | balanced default path                           |
-| `verify`     | `gpt-5.4`           | orchestration-only validation/review step       |
+| `verify`     | `gpt-5.5`           | orchestration-only validation/review step       |
 
 ### Complexity signals
 
@@ -311,12 +311,12 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex App Server transport: local `codex app-server` from Codex CLI `0.118.0`
-- Legacy rollback path: `@openai/codex-sdk@0.118.0`
-- Codex CLI baseline: `0.118.0`
-- Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
+- Codex App Server transport: local `codex app-server` from Codex CLI `0.125.0`
+- Legacy rollback path: `@openai/codex-sdk@0.121.0`
+- Codex CLI baseline: `0.125.0`
+- Current Stave-supported Codex model IDs: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 
-Stave requires a user-installed Codex CLI (`codex` ≥ 0.118.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexBinaryPath` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
+Stave requires a user-installed Codex CLI (`codex` ≥ 0.125.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexBinaryPath` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
 
 Claude follows the same pattern. Users can force a specific local `claude` install via `runtimeOptions.claudeBinaryPath` or the Settings dialog's Claude Binary override before Stave falls back to environment-based discovery.
 

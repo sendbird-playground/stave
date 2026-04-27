@@ -1956,7 +1956,7 @@ const defaultSettings: AppSettings = {
   claudeTaskBudgetTokens: 0,
   claudeAdvisorModel: "",
   claudeSettingSources: ["project"],
-  claudeEffort: "medium",
+  claudeEffort: "high",
   claudeThinkingMode: "adaptive",
   claudeAgentProgressSummaries: false,
   claudeFastMode: false,

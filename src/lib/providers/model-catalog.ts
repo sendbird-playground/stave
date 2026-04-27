@@ -33,6 +33,7 @@ export const CLAUDE_SDK_MODEL_OPTIONS = [
 // - local `codex app-server` / CLI baseline support
 // - https://developers.openai.com/codex/models
 export const CODEX_MODEL_OPTIONS = [
+  "gpt-5.5",
   "gpt-5.4",
   "gpt-5.4-mini",
   "gpt-5.3-codex",
@@ -92,7 +93,7 @@ export const PROVIDER_DESCRIPTORS = [
     iconUrl: CODEX_COLOR_ICON_URL,
     fallbackLabel: "O",
     models: CODEX_MODEL_OPTIONS,
-    defaultModel: "gpt-5.4",
+    defaultModel: "gpt-5.5",
     sessionLabel: "Codex thread ID",
     capabilities: {
       nativeCommandCatalog: true,
@@ -241,7 +242,13 @@ export function resolveDefaultClaudeEffortForModel(args: {
   model: string;
 }): NonNullable<ProviderRuntimeOptions["claudeEffort"]> {
   const normalizedModel = args.model.trim().toLowerCase();
-  return normalizedModel.includes("opus") ? "xhigh" : "medium";
+  if (normalizedModel.includes("opus")) {
+    return "xhigh";
+  }
+  if (normalizedModel.includes("sonnet-4-6")) {
+    return "high";
+  }
+  return "medium";
 }
 
 export function resolveClaudeEffortForModelSwitch(args: {
@@ -303,6 +310,7 @@ export function toHumanModelName(args: { model: string }) {
     "claude-sonnet-4-6": "Claude Sonnet 4.6",
     "claude-sonnet-4-6[1m]": "Claude Sonnet 4.6 (1M)",
     "claude-haiku-4-5": "Claude Haiku 4.5",
+    "gpt-5.5": "GPT-5.5",
     "gpt-5.4": "GPT-5.4",
     "gpt-5.4-mini": "GPT-5.4 Mini",
     "gpt-5-codex": "GPT-5-Codex",

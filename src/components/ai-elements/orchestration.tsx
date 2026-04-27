@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { OrchestrationProgressPart, OrchestrationSubtaskState } from "@/types/chat";
 import { ModelIcon } from "@/components/ai-elements/model-icon";
+import { inferProviderIdFromModel } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function resolveProviderIdForModel(model: string): ProviderId {
-  const codexModels = new Set(["gpt-5.4", "gpt-5.3-codex"]);
-  return codexModels.has(model) ? "codex" : "claude-code";
+  return inferProviderIdFromModel({ model });
 }
 
 function SubtaskStatusIcon({ status }: { status: OrchestrationSubtaskState["status"] }) {
